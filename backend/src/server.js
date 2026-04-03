@@ -1,0 +1,80 @@
+// src/server.js — AffIntel Backend v3
+require("dotenv").config();
+const express  = require("express");
+const cors     = require("cors");
+const helmet   = require("helmet");
+const morgan   = require("morgan");
+const http     = require("http");
+const { WebSocketServer } = require("ws");
+const rateLimit = require("express-rate-limit");
+const db = require("./db");
+const { startLiveSync, syncOffersDaily } = require("./services/liveSync");
+
+const app    = express();
+const server = http.createServer(app);
+const PORT   = process.env.PORT || 4000;
+const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MINUTES) || 2;
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+const wss = new WebSocketServer({ server, path: "/ws" });
+app.set("wss", wss);
+
+wss.on("connection", (ws) => {
+  console.log(`🔌 WS client connected (${wss.clients.size} total)`);
+  ws.send(JSON.stringify({ type: "connected", message: "AffIntel WS ready" }));
+  ws.on("close", () => console.log(`🔌 WS disconnected (${wss.clients.size} remaining)`));
+  ws.on("error", (e) => console.error("WS error:", e.message));
+});
+
+// ── Middleware ─────────────────────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({
+  origin: [
+    process.env.FRONTEND_URL || "http://localhost:3000",
+    "http://localhost:5173", "http://localhost:4173",
+  ],
+  credentials: true,
+}));
+app.use(morgan("dev"));
+app.use(express.json({ limit: "1mb" }));
+// Increase timeout for long-running requests (offer imports)
+app.use((req, res, next) => { res.setTimeout(120000); next(); });
+app.use("/api/", rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+app.use("/api/auth",     require("./routes/auth"));
+app.use("/api/sponsors", require("./routes/sponsors"));
+app.use("/api/offers",   require("./routes/offers"));
+app.use("/api/stats",    require("./routes/stats"));
+app.use("/api/ai",       require("./routes/ai"));
+
+// Debug routes (dev only)
+if (process.env.NODE_ENV !== "production") {
+  app.use("/api/debug", require("./routes/debug"));
+}
+
+// Health check
+app.get("/api/health", async (req, res) => {
+  const cnt = await db.sponsors.count({});
+  res.json({
+    status: "ok", version: "3.0.0",
+    sponsors: cnt,
+    ws_clients: wss.clients.size,
+    uptime: process.uptime().toFixed(1) + "s",
+    sync_interval: SYNC_INTERVAL + " min",
+  });
+});
+
+app.use((req, res) => res.status(404).json({ error: "Not found" }));
+app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: "Server error" }); });
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+server.listen(PORT, () => {
+  console.log(`\n🚀 AffIntel Backend  →  http://localhost:${PORT}`);
+  console.log(`   WebSocket         →  ws://localhost:${PORT}/ws`);
+  console.log(`   Health            →  http://localhost:${PORT}/api/health`);
+  console.log(`   Live sync         →  every ${SYNC_INTERVAL} min\n`);
+
+  // Start live auto-sync
+  startLiveSync(wss, SYNC_INTERVAL);
+});
