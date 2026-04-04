@@ -134,39 +134,29 @@ router.get("/dashboard", async (req, res) => {
       weeklyChart = Object.values(byDate);
     }
 
-    // ── Top offers — date-filtered ────────────────────────────────────────────
+    // ── Top offers — show best offers from active sponsors in period ──────────
     const offers = await db.offers.find({ status: "active" });
     const spMap  = Object.fromEntries(sponsors.map(s => [s.id, s]));
 
-    // Sum all offers leads per sponsor → true historical denominator
-    const offerLeadsBySponsor = {};
-    for (const o of offers) {
-      offerLeadsBySponsor[o.sponsor_id] = (offerLeadsBySponsor[o.sponsor_id] || 0) + (o.leads || 0);
-    }
+    // Sponsors that had leads OR revenue in the period
+    const activeSponsorsInPeriod = new Set(
+      Object.entries(sponsorBreakdownMap)
+        .filter(([, v]) => v.leads > 0 || v.revenue > 0)
+        .map(([k]) => k)
+    );
 
     const topOffers = offers
-      .filter(o => (o.leads || 0) > 0)
+      .filter(o => (o.leads || 0) > 0 && activeSponsorsInPeriod.has(o.sponsor_id))
       .map(o => {
-        const sp        = spMap[o.sponsor_id];
-        const spTotal   = offerLeadsBySponsor[o.sponsor_id] || 0;
-        const spPeriod  = sponsorBreakdownMap[o.sponsor_id]?.leads || 0;
-        const scale     = spTotal > 0 ? spPeriod / spTotal : 0;
-        // Use exact decimal for revenue, show at least fractional leads
-        const periodLeadsExact = (o.leads || 0) * scale;
-        const periodRevenue    = o.payout * periodLeadsExact;
+        const sp = spMap[o.sponsor_id];
         return {
           ...o,
-          period_leads:   periodLeadsExact,          // keep decimal for sorting
-          period_leads_display: periodLeadsExact < 1 && periodLeadsExact > 0
-            ? periodLeadsExact.toFixed(2)            // e.g. 0.18
-            : Math.round(periodLeadsExact),
-          period_revenue: periodRevenue,
-          est_revenue:    periodRevenue,
-          sponsor_name:   sp?.name,
-          sponsor_color:  sp?.color,
+          est_revenue:   o.payout * o.leads,
+          sponsor_name:  sp?.name,
+          sponsor_color: sp?.color,
         };
       })
-      .sort((a, b) => b.period_revenue - a.period_revenue)
+      .sort((a, b) => b.est_revenue - a.est_revenue)
       .slice(0, 5);
 
     // ── Sponsor breakdown ─────────────────────────────────────────────────────

@@ -508,8 +508,8 @@ function DashboardPage() {
                     <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
                     <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
                     <td><span className="payout-v">${o.payout}</span></td>
-                    <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.period_leads_display ?? o.period_leads}</td>
-                    <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.period_revenue).toFixed(2)}</td>
+                    <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.leads}</td>
+                    <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.est_revenue).toFixed(0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -654,17 +654,36 @@ function DashboardPage() {
               )}
             </div>
           ) : (
-            <div style={{padding:"28px 20px",textAlign:"center"}}>
-              <div style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>
-                Aucune donnée pour cette période
+            <div style={{padding:"20px 24px"}}>
+              <div style={{fontSize:12,fontWeight:700,color:"var(--text)",marginBottom:16}}>
+                Kifach t-active Sub-Affiliate Leaderboard:
               </div>
-              <div style={{fontSize:11,color:"var(--text3)",fontFamily:"var(--font-mono)",marginBottom:16}}>
-                Clique "Import from Everflow" pour importer l'historique
-              </div>
-              <div style={{background:"var(--bg3)",borderRadius:8,padding:"10px 14px",marginBottom:12,textAlign:"left"}}>
-                <div style={{fontSize:10,color:"var(--text2)",marginBottom:6}}>OU configure le Postback dans Everflow (temps réel) :</div>
-                <div style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--cyan)",wordBreak:"break-all",userSelect:"all"}}>
-                  {window.location.origin}/api/postback?sub3={"{sub3}"}&revenue={"{payout}"}&offer_id={"{network_offer_id}"}&transaction_id={"{transaction_id}"}
+
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {/* Step 1 */}
+                <div style={{background:"var(--bg3)",borderRadius:8,padding:"12px 16px",borderLeft:"3px solid var(--cyan)"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"var(--cyan)",marginBottom:6}}>① Dkhol Everflow → Settings → Global Postback</div>
+                  <div style={{fontSize:10,color:"var(--text3)",marginBottom:8}}>Wla f kol offer: Offer → Edit → Postback URL</div>
+                  <div style={{background:"var(--bg2)",borderRadius:6,padding:"8px 12px",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--green)",wordBreak:"break-all",userSelect:"all",cursor:"text"}}>
+                    {window.location.origin}/api/postback?sub3={"{sub3}"}&revenue={"{payout}"}&offer_id={"{network_offer_id}"}&transaction_id={"{transaction_id}"}
+                  </div>
+                  <button className="btn btn-sm" style={{marginTop:8,fontSize:10}}
+                    onClick={()=>navigator.clipboard.writeText(`${window.location.origin}/api/postback?sub3={sub3}&revenue={payout}&offer_id={network_offer_id}&transaction_id={transaction_id}`)}>
+                    Copy URL
+                  </button>
+                </div>
+
+                {/* Step 2 */}
+                <div style={{background:"var(--bg3)",borderRadius:8,padding:"12px 16px",borderLeft:"3px solid var(--purple)"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"var(--purple)",marginBottom:4}}>② Wla import l-historique mn bouton</div>
+                  <div style={{fontSize:10,color:"var(--text3)"}}>Click "⟳ Import from Everflow" faw9 — kayji3awad yjerrab l'API dyal Everflow automatically</div>
+                </div>
+
+                {/* Result */}
+                <div style={{background:"var(--bg3)",borderRadius:8,padding:"10px 16px",borderLeft:"3px solid var(--green)"}}>
+                  <div style={{fontSize:10,color:"var(--text2)"}}>
+                    Ki t-setup postback → kol conversion f Everflow kayji automatically hna → tableau kaytzad real-time
+                  </div>
                 </div>
               </div>
             </div>
