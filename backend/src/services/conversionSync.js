@@ -8,67 +8,40 @@ const SUB_NAMES = {
   16: "Kaoutar", 17: "Hafssa",
 };
 
-// Fetch affiliate account info to get network_affiliate_id
-async function fetchAffiliateInfo(apiKey) {
-  const headers = {
-    "X-Eflow-API-Key": apiKey,
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-  };
-  try {
-    const r = await fetch("https://api.eflow.team/v1/affiliates/account", { method: "GET", headers, timeout: 15000 });
-    if (!r.ok) return null;
-    const json = await r.json();
-    // Try various shapes: { affiliate_id, network_affiliate_id, id, account: { id } }
-    const id = json.network_affiliate_id ?? json.affiliate_id ?? json.id
-             ?? json.account?.network_affiliate_id ?? json.account?.id ?? null;
-    if (id) console.log(`[convSync] Affiliate ID resolved: ${id}`);
-    return { id, raw: json };
-  } catch { return null; }
-}
+// Build attempts using the CORRECT body format discovered via DevTools
+function buildAttempts(from, to) {
+  // Correct body format as used by the Everflow portal (discovered via DevTools):
+  // POST /v1/affiliates/reporting/conversions?page=1&page_size=100&order_field=conversion_unix_timestamp&order_direction=desc
+  // Body: { timezone_id: 55, from, to, show_conversions: true, show_events: false, query: { filters: [], search_terms: [] } }
 
-// All possible body combinations to try — now parametrised with optional affiliate_id
-function buildAttempts(from, to, affiliateId) {
-  const base  = { from, to, timezone_id: 67, currency_id: "USD" };
-  const pag   = { page: 1, page_size: 500 };
-  const affF  = affiliateId ? { network_affiliate_id: [affiliateId] } : {};
-  const affF2 = affiliateId ? { affiliate_id: [affiliateId] } : {};
+  const qsBase  = "order_field=conversion_unix_timestamp&order_direction=desc";
+  const bodyBase = { from, to, show_conversions: true, show_events: false };
 
   return [
-    // ── With affiliate_id in filters (most likely required) ───────────────────
-    ...(affiliateId ? [
-      { method: "POST", path: "/v1/affiliates/reporting/conversions",
-        body: { ...base, filters: affF, page: 1, page_size: 500 } },
-      { method: "POST", path: "/v1/affiliates/reporting/conversions",
-        body: { ...base, filters: affF2, page: 1, page_size: 500 } },
-      { method: "POST", path: "/v1/affiliates/reporting/conversions",
-        body: { ...base, filters: affF, pagination: pag } },
-      { method: "POST", path: "/v1/affiliates/reporting/conversions",
-        body: { ...base, network_affiliate_id: affiliateId, page: 1, page_size: 500 } },
-      { method: "POST", path: "/v1/affiliates/reporting/conversions",
-        body: { ...base, affiliate_id: affiliateId, page: 1, page_size: 500 } },
-    ] : []),
-
-    // ── Without affiliate_id ──────────────────────────────────────────────────
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { from, to, page: 1, page_size: 500 } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { from, to, timezone_id: 67, page: 1, page_size: 500 } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, page: 1, page_size: 500 } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, filters: {}, page: 1, page_size: 500 } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, filters: {}, pagination: pag } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, filters: {}, columns: ["sub3","revenue","transaction_id","conversion_date"], pagination: pag } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { from, to, timezone_id: 67, currency_id: "USD", report_type: "affiliate", page: 1, page_size: 500 } },
-    // ── Different page_size ───────────────────────────────────────────────────
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { from, to, timezone_id: 67, page: 1, page_size: 25 } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { from, to, page: 1, limit: 500 } },
+    // ── Exact format used by the portal (timezone 55) ─────────────────────────
+    { method: "POST",
+      path: `/v1/affiliates/reporting/conversions?page=1&page_size=100&${qsBase}`,
+      body: { ...bodyBase, timezone_id: 55, query: { filters: [], search_terms: [] } } },
+    // ── Same with page_size=500 ───────────────────────────────────────────────
+    { method: "POST",
+      path: `/v1/affiliates/reporting/conversions?page=1&page_size=500&${qsBase}`,
+      body: { ...bodyBase, timezone_id: 55, query: { filters: [], search_terms: [] } } },
+    // ── Without query object ──────────────────────────────────────────────────
+    { method: "POST",
+      path: `/v1/affiliates/reporting/conversions?page=1&page_size=100&${qsBase}`,
+      body: { ...bodyBase, timezone_id: 55 } },
+    // ── Try timezone_id 67 (UTC) ──────────────────────────────────────────────
+    { method: "POST",
+      path: `/v1/affiliates/reporting/conversions?page=1&page_size=100&${qsBase}`,
+      body: { ...bodyBase, timezone_id: 67, query: { filters: [], search_terms: [] } } },
+    // ── Minimal body, pagination in query string ──────────────────────────────
+    { method: "POST",
+      path: `/v1/affiliates/reporting/conversions?page=1&page_size=100&${qsBase}`,
+      body: { from, to, timezone_id: 55 } },
+    // ── With currency_id ──────────────────────────────────────────────────────
+    { method: "POST",
+      path: `/v1/affiliates/reporting/conversions?page=1&page_size=100&${qsBase}`,
+      body: { ...bodyBase, timezone_id: 55, currency_id: "USD", query: { filters: [], search_terms: [] } } },
   ];
 }
 
@@ -101,11 +74,7 @@ async function detectAndFetch(apiKey, from, to) {
     "Accept": "application/json",
   };
 
-  // Step 1: resolve affiliate ID (used to build more accurate request bodies)
-  const accInfo = await fetchAffiliateInfo(apiKey);
-  const affiliateId = accInfo?.id ?? null;
-
-  const attempts = buildAttempts(from, to, affiliateId);
+  const attempts = buildAttempts(from, to);
 
   for (const att of attempts) {
     try {

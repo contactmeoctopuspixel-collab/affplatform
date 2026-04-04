@@ -98,9 +98,14 @@ function startLiveSync(wssInstance, intervalMinutes = 2) {
 
   // Initial sponsor sync after 5 seconds
   setTimeout(syncAllSponsors, 5000);
+  // Initial conversion sync after 20 seconds
+  setTimeout(runConversionSync, 20000);
 
-  // Then every N minutes (sponsors only — conversions come via postback)
-  syncInterval = setInterval(syncAllSponsors, intervalMinutes * 60 * 1000);
+  // Then every N minutes
+  syncInterval = setInterval(() => {
+    syncAllSponsors();
+    runConversionSync();
+  }, intervalMinutes * 60 * 1000);
 }
 
 function stopLiveSync() {
