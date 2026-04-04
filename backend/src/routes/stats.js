@@ -231,8 +231,7 @@ router.get("/sub-affiliates", async (req, res) => {
     const fromDate = req.query.from || weekAgo;
     const toDate   = req.query.to   || today;
 
-    // Read from conversions DB (populated by /api/postback from Everflow)
-    const toEnd = toDate + "T23:59:59.999Z";
+    const toEnd    = toDate   + "T23:59:59.999Z";
     const fromStart = fromDate + "T00:00:00.000Z";
     const conversions = await db.conversions.find({
       created_at: { $gte: fromStart, $lte: toEnd },
@@ -249,7 +248,75 @@ router.get("/sub-affiliates", async (req, res) => {
     }
 
     const list = Object.values(totals).sort((a, b) => b.leads - a.leads || b.revenue - a.revenue);
-    res.json({ sub_affiliates: list, total_conversions: conversions.length, dateRange: { from: fromDate, to: toDate } });
+    const total = await db.conversions.count({});
+    res.json({ sub_affiliates: list, total_conversions: conversions.length, total_in_db: total, dateRange: { from: fromDate, to: toDate } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── IMPORT CONVERSIONS FROM EVERFLOW ────────────────────────────────────────
+router.post("/import-conversions", async (req, res) => {
+  try {
+    const today   = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    const fromDate = req.body?.from || weekAgo;
+    const toDate   = req.body?.to   || today;
+
+    const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: null } });
+    let imported = 0;
+    let tried = 0;
+    const errors = [];
+
+    for (const sp of sponsors) {
+      if (!sp.api_key || sp.platform === "adsurf") continue;
+      tried++;
+      const headers = { "X-Eflow-API-Key": sp.api_key, "Content-Type": "application/json", "Accept": "application/json" };
+
+      // Try multiple body formats for the conversions endpoint
+      const bodies = [
+        { from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 500 } },
+        { from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", page: 1, page_size: 500 },
+        { from: fromDate, to: toDate, currency_id: "USD", pagination: { page: 1, page_size: 500 } },
+        { from: fromDate, to: toDate, timezone_id: 67 },
+      ];
+
+      let data = null;
+      for (const body of bodies) {
+        try {
+          const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/conversions", {
+            method: "POST", headers, body: JSON.stringify(body), timeout: 20000,
+          });
+          if (r.ok) {
+            const ct = r.headers.get("content-type") || "";
+            if (ct.includes("application/json")) {
+              const j = await r.json();
+              if (j.conversions || j.performance) { data = j; break; }
+            }
+          }
+        } catch {}
+      }
+
+      if (!data) { errors.push(`${sp.name}: conversions API unavailable`); continue; }
+
+      const rows = data.conversions || data.performance || [];
+      for (const row of rows) {
+        const txId = row.transaction_id || row.conversion_id || row.id || `${sp.id}-${row.click_date}-${Math.random()}`;
+        const sub3 = String(row.sub3 || row.sub_id_3 || "");
+        const revenue = parseFloat(row.revenue || row.payout || 0);
+        const createdAt = row.conversion_date || row.created_at || new Date().toISOString();
+
+        const exists = await db.conversions.findOne({ transaction_id: txId });
+        if (exists) continue;
+        await db.conversions.insert({
+          _id: txId, transaction_id: txId,
+          sub3, revenue, offer_id: String(row.offer_id || row.network_offer_id || ""),
+          sponsor: sp.name, event_type: "cv",
+          created_at: new Date(createdAt).toISOString(),
+        });
+        imported++;
+      }
+    }
+
+    res.json({ ok: true, imported, tried, errors, dateRange: { from: fromDate, to: toDate } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

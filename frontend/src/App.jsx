@@ -264,6 +264,8 @@ function LoginPage({ onLogin }) {
 function DashboardPage() {
   const [data,       setData]       = useState(null);
   const [subData,    setSubData]    = useState(null);
+  const [subImporting, setSubImporting] = useState(false);
+  const [subImportMsg, setSubImportMsg] = useState("");
   const [err,        setErr]        = useState("");
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pulse,      setPulse]      = useState(false);
@@ -592,22 +594,32 @@ function DashboardPage() {
         </>
       )}
 
-      {/* Sub-Affiliate Leaderboard */}
-      {subData?.sub_affiliates?.length > 0 && (
-        <>
-          <div className="sec-title">Sub-Affiliate Leaderboard</div>
-          <div className="card">
+      {/* Sub-Affiliate Leaderboard — always visible */}
+      <>
+        <div className="sec-title" style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span>Sub-Affiliate Leaderboard</span>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {subImportMsg && <span style={{fontSize:11,color:"var(--green)",fontFamily:"var(--font-mono)"}}>{subImportMsg}</span>}
+            <button className="btn btn-sm" disabled={subImporting} style={{fontSize:11}}
+              onClick={async () => {
+                setSubImporting(true); setSubImportMsg("");
+                try {
+                  const r = await api.importConversions(dateFrom, dateTo);
+                  setSubImportMsg(r.imported > 0 ? `✓ ${r.imported} imported` : r.errors?.[0] || "No new data");
+                  if (r.imported > 0) load();
+                } catch(e) { setSubImportMsg("Error: " + e.message); }
+                finally { setSubImporting(false); }
+              }}>
+              {subImporting ? "⟳ Importing..." : "⟳ Import from Everflow"}
+            </button>
+          </div>
+        </div>
+        <div className="card">
+          {subData?.sub_affiliates?.length > 0 ? (
             <div className="tbl-wrap">
               <table>
                 <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Sub-Affiliate</th>
-                    <th>ID</th>
-                    <th>Leads</th>
-                    <th>Clicks</th>
-                    <th>Revenue</th>
-                  </tr>
+                  <tr><th>#</th><th>Sub-Affiliate</th><th>ID</th><th>Leads</th><th>Revenue</th></tr>
                 </thead>
                 <tbody>
                   {subData.sub_affiliates.map((s, i) => {
@@ -627,17 +639,36 @@ function DashboardPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="mono" style={{color:"var(--text3)"}}>{Number(s.clicks).toLocaleString()}</td>
                         <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(s.revenue).toFixed(2)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              {subData?.total_in_db > 0 && (
+                <div style={{padding:"8px 16px",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+                  {subData.total_conversions} conversions in this period · {subData.total_in_db} total in DB
+                </div>
+              )}
             </div>
-          </div>
-        </>
-      )}
+          ) : (
+            <div style={{padding:"28px 20px",textAlign:"center"}}>
+              <div style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>
+                Aucune donnée pour cette période
+              </div>
+              <div style={{fontSize:11,color:"var(--text3)",fontFamily:"var(--font-mono)",marginBottom:16}}>
+                Clique "Import from Everflow" pour importer l'historique
+              </div>
+              <div style={{background:"var(--bg3)",borderRadius:8,padding:"10px 14px",marginBottom:12,textAlign:"left"}}>
+                <div style={{fontSize:10,color:"var(--text2)",marginBottom:6}}>OU configure le Postback dans Everflow (temps réel) :</div>
+                <div style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--cyan)",wordBreak:"break-all",userSelect:"all"}}>
+                  {window.location.origin}/api/postback?sub3={"{sub3}"}&revenue={"{payout}"}&offer_id={"{network_offer_id}"}&transaction_id={"{transaction_id}"}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </>
     </>
   );
 }
