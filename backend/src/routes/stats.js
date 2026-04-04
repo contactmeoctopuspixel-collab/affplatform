@@ -237,21 +237,24 @@ router.get("/sub-affiliates/debug", async (req, res) => {
       const headers = { "X-Eflow-API-Key": sp.api_key, "Content-Type": "application/json", "Accept": "application/json" };
       const body = JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 50 } });
       try {
-        // Try 3 different body formats
-        const bodies = [
-          JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD" }),
-          JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", page: 1, page_size: 100 }),
-          JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, columns: [] }),
+        // Try multiple endpoints/body combos to find one that works for sub3
+        const attempts = [
+          { url: "https://api.eflow.team/v1/affiliates/reporting/daily", body: JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", column: "sub3", filters: {}, pagination: { page: 1, page_size: 100 } }) },
+          { url: "https://api.eflow.team/v1/affiliates/reporting/offer", body: JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 10 } }) },
+          { url: "https://api.eflow.team/v1/affiliates/reporting/conversions", body: JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: { event_type: "cv" }, pagination: { page: 1, page_size: 5 } }) },
         ];
         const tryResults = [];
-        for (const b of bodies) {
-          const r2 = await fetch("https://api.eflow.team/v1/affiliates/reporting/conversions", { method: "POST", headers, body: b, timeout: 20000 });
-          const text = await r2.text();
-          let json = null; try { json = JSON.parse(text); } catch {}
-          tryResults.push({ body: b.slice(0, 80), status: r2.status, response: text.slice(0, 300) });
-          if (r2.ok) break;
+        for (const { url, body: b } of attempts) {
+          try {
+            const r2 = await fetch(url, { method: "POST", headers, body: b, timeout: 20000 });
+            const text = await r2.text();
+            let json = null; try { json = JSON.parse(text); } catch {}
+            const rows = json ? (json.conversions || json.performance || []) : [];
+            tryResults.push({ url: url.replace("https://api.eflow.team", ""), status: r2.status, rows: rows.length, firstRowKeys: rows[0] ? Object.keys(rows[0]) : [], firstRow: rows[0] || null, error: json?.Error || null });
+          } catch (e) { tryResults.push({ url, error: e.message }); }
         }
         results.push({ sponsor: sp.name, platform: sp.platform, tries: tryResults });
+        break; // only test first working sponsor
       } catch (e) {
         results.push({ sponsor: sp.name, error: e.message });
       }
