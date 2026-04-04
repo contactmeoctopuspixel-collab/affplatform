@@ -44,7 +44,6 @@ app.use("/api/", rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 // ── Postback from Everflow (public — no auth, called by Everflow server) ──────
 // Configure in Everflow portal: Settings → Global Postback
 // URL: https://affplatform.alphalink.it.com/api/postback?sub3={sub3}&revenue={payout}&offer_id={network_offer_id}&transaction_id={transaction_id}&sponsor={affiliate_name}
-const db = require("./db");
 app.get("/api/postback", async (req, res) => {
   try {
     const { sub3, revenue, offer_id, transaction_id, sponsor, event_type = "cv" } = req.query;
