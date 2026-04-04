@@ -134,11 +134,28 @@ router.get("/dashboard", async (req, res) => {
       weeklyChart = Object.values(byDate);
     }
 
-    // ── Top offers ────────────────────────────────────────────────────────────
+    // ── Top offers — date-filtered via proportional scaling ───────────────────
+    // For each sponsor, we know the period leads (from sponsorBreakdownMap).
+    // We scale each offer's stored leads by (period_leads / total_stored_leads).
     const offers = await db.offers.find({ status: "active" });
     const spMap  = Object.fromEntries(sponsors.map(s => [s.id, s]));
     const topOffers = offers
-      .map(o => ({ ...o, est_revenue: o.payout * o.leads, sponsor_name: spMap[o.sponsor_id]?.name, sponsor_color: spMap[o.sponsor_id]?.color }))
+      .map(o => {
+        const sp = spMap[o.sponsor_id];
+        const spTotal  = sp?.leads || 0;
+        const spPeriod = sponsorBreakdownMap[o.sponsor_id]?.leads || 0;
+        // Scale offer leads by period ratio
+        const scale = spTotal > 0 ? spPeriod / spTotal : 0;
+        const periodLeads = Math.round((o.leads || 0) * scale);
+        return {
+          ...o,
+          period_leads: periodLeads,
+          est_revenue: o.payout * periodLeads,
+          sponsor_name:  sp?.name,
+          sponsor_color: sp?.color,
+        };
+      })
+      .filter(o => o.period_leads > 0)
       .sort((a, b) => b.est_revenue - a.est_revenue)
       .slice(0, 5);
 

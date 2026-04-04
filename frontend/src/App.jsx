@@ -575,7 +575,7 @@ function DashboardPage() {
           <div className="card">
             <div className="tbl-wrap">
               <table>
-                <thead><tr><th>ID</th><th>Offer</th><th>Sponsor</th><th>Payout</th><th>Leads</th><th>Est. Revenue</th></tr></thead>
+                <thead><tr><th>ID</th><th>Offer</th><th>Sponsor</th><th>Payout</th><th>Leads (période)</th><th>Est. Revenue</th></tr></thead>
                 <tbody>
                   {topOffers.map(o => (
                     <tr key={o.id}>
@@ -583,7 +583,7 @@ function DashboardPage() {
                       <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
                       <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
                       <td><span className="payout-v">${o.payout}</span></td>
-                      <td className="mono">{o.leads}</td>
+                      <td className="mono">{o.period_leads ?? o.leads}</td>
                       <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.est_revenue).toFixed(0)}</td>
                     </tr>
                   ))}
