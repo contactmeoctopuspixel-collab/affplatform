@@ -41,6 +41,34 @@ app.use(express.json({ limit: "1mb" }));
 app.use((req, res, next) => { res.setTimeout(120000); next(); });
 app.use("/api/", rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 
+// ── Postback from Everflow (public — no auth, called by Everflow server) ──────
+// Configure in Everflow portal: Settings → Global Postback
+// URL: https://affplatform.alphalink.it.com/api/postback?sub3={sub3}&revenue={payout}&offer_id={network_offer_id}&transaction_id={transaction_id}&sponsor={affiliate_name}
+const db = require("./db");
+app.get("/api/postback", async (req, res) => {
+  try {
+    const { sub3, revenue, offer_id, transaction_id, sponsor, event_type = "cv" } = req.query;
+    if (!transaction_id) return res.status(400).send("missing transaction_id");
+    const exists = await db.conversions.findOne({ transaction_id });
+    if (exists) return res.send("ok duplicate");
+    await db.conversions.insert({
+      _id: transaction_id,
+      transaction_id,
+      sub3:     sub3 || "",
+      revenue:  parseFloat(revenue || 0),
+      offer_id: offer_id || "",
+      sponsor:  sponsor || "",
+      event_type,
+      created_at: new Date().toISOString(),
+    });
+    // Push live event to WS clients
+    wss.clients.forEach(c => {
+      if (c.readyState === 1) c.send(JSON.stringify({ type: "postback_conversion", sub3, revenue: parseFloat(revenue||0), offer_id }));
+    });
+    res.send("ok");
+  } catch (e) { res.status(500).send("error: " + e.message); }
+});
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api/auth",     require("./routes/auth"));
 app.use("/api/sponsors", require("./routes/sponsors"));

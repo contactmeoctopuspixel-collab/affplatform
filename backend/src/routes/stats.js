@@ -223,49 +223,6 @@ const SUB_NAMES = {
   17: "Hafssa",
 };
 
-// Debug: returns raw Everflow sub2 API response — call GET /api/stats/sub-affiliates/debug
-router.get("/sub-affiliates/debug", async (req, res) => {
-  try {
-    const today   = new Date().toISOString().slice(0, 10);
-    const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
-    const fromDate = req.query.from || weekAgo;
-    const toDate   = req.query.to   || today;
-    const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: null } });
-    const results = [];
-    for (const sp of sponsors) {
-      if (!sp.api_key || sp.platform === "adsurf") continue;
-      const headers = { "X-Eflow-API-Key": sp.api_key, "Content-Type": "application/json", "Accept": "application/json" };
-      const body = JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 50 } });
-      try {
-        // Try sub-affiliate specific endpoints
-        const stdBody = JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 10 } });
-        const attempts = [
-          { url: "/v1/affiliates/reporting/network-affiliate", body: stdBody },
-          { url: "/v1/affiliates/reporting/sub-id", body: stdBody },
-          { url: "/v1/affiliates/reporting/sub_id", body: stdBody },
-          { url: "/v1/affiliates/network-affiliates", method: "GET" },
-          { url: "/v1/affiliates/reporting/conversions", body: JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", event_type: "cv", page: 1, page_size: 5 }) },
-        ];
-        const tryResults = [];
-        for (const { url, body: b, method: m = "POST" } of attempts) {
-          try {
-            const opts = m === "GET" ? { method: "GET", headers, timeout: 15000 } : { method: "POST", headers, body: b, timeout: 15000 };
-            const r2 = await fetch("https://api.eflow.team" + url, opts);
-            const text = await r2.text();
-            let json = null; try { json = JSON.parse(text); } catch {}
-            const rows = json ? (json.conversions || json.performance || json.network_affiliates || json.data || []) : [];
-            tryResults.push({ url, method: m, status: r2.status, rows: Array.isArray(rows) ? rows.length : "n/a", topKeys: json ? Object.keys(json) : [], firstRow: Array.isArray(rows) ? rows[0] : json });
-          } catch (e) { tryResults.push({ url, error: e.message }); }
-        }
-        results.push({ sponsor: sp.name, platform: sp.platform, tries: tryResults });
-        break;
-      } catch (e) {
-        results.push({ sponsor: sp.name, error: e.message });
-      }
-    }
-    res.json({ results, dateRange: { from: fromDate, to: toDate } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
 
 router.get("/sub-affiliates", async (req, res) => {
   try {
@@ -274,47 +231,25 @@ router.get("/sub-affiliates", async (req, res) => {
     const fromDate = req.query.from || weekAgo;
     const toDate   = req.query.to   || today;
 
-    const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: null } });
-    const totals = {};
+    // Read from conversions DB (populated by /api/postback from Everflow)
+    const toEnd = toDate + "T23:59:59.999Z";
+    const fromStart = fromDate + "T00:00:00.000Z";
+    const conversions = await db.conversions.find({
+      created_at: { $gte: fromStart, $lte: toEnd },
+      event_type: { $ne: "click" },
+    });
 
-    for (const sp of sponsors) {
-      if (!sp.api_key || sp.platform === "adsurf") continue;
-      try {
-        const headers = {
-          "X-Eflow-API-Key": sp.api_key,
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        };
-        // Use conversions endpoint — includes sub1/sub2/sub3 per conversion
-        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/conversions", {
-          method: "POST", headers,
-          body: JSON.stringify({
-            from: fromDate, to: toDate,
-            timezone_id: 67, currency_id: "USD",
-            filters: {}, pagination: { page: 1, page_size: 500 },
-          }),
-          timeout: 20000,
-        });
-        if (!r.ok) continue;
-        const ct = r.headers.get("content-type") || "";
-        if (!ct.includes("application/json")) continue;
-        const data = await r.json();
-        for (const row of (data.conversions || data.performance || [])) {
-          // Everflow conversions have sub3 as a direct field
-          const rawSub = row.sub3 ?? row.sub_id_3 ?? row["Sub3"] ?? "";
-          const subId = parseInt(String(rawSub), 10);
-          if (!subId || !SUB_NAMES[subId]) continue;
-          if (!totals[subId]) totals[subId] = { id: subId, name: SUB_NAMES[subId], leads: 0, clicks: 0, revenue: 0 };
-          // Each conversion row = 1 lead
-          totals[subId].leads   += 1;
-          totals[subId].revenue += Number(row.revenue || row.payout || 0);
-          totals[subId].clicks  += Number(row.clicks  || 0);
-        }
-      } catch {}
+    const totals = {};
+    for (const cv of conversions) {
+      const subId = parseInt(String(cv.sub3 || ""), 10);
+      if (!subId || !SUB_NAMES[subId]) continue;
+      if (!totals[subId]) totals[subId] = { id: subId, name: SUB_NAMES[subId], leads: 0, revenue: 0 };
+      totals[subId].leads   += 1;
+      totals[subId].revenue += cv.revenue || 0;
     }
 
     const list = Object.values(totals).sort((a, b) => b.leads - a.leads || b.revenue - a.revenue);
-    res.json({ sub_affiliates: list, dateRange: { from: fromDate, to: toDate } });
+    res.json({ sub_affiliates: list, total_conversions: conversions.length, dateRange: { from: fromDate, to: toDate } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
