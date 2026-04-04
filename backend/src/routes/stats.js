@@ -145,23 +145,27 @@ router.get("/dashboard", async (req, res) => {
     }
 
     const topOffers = offers
+      .filter(o => (o.leads || 0) > 0)
       .map(o => {
         const sp        = spMap[o.sponsor_id];
-        const spTotal   = offerLeadsBySponsor[o.sponsor_id] || 0; // sum of all offers leads for this sponsor
+        const spTotal   = offerLeadsBySponsor[o.sponsor_id] || 0;
         const spPeriod  = sponsorBreakdownMap[o.sponsor_id]?.leads || 0;
         const scale     = spTotal > 0 ? spPeriod / spTotal : 0;
-        const periodLeads   = Math.round((o.leads || 0) * scale);
-        const periodRevenue = o.payout * periodLeads;
+        // Use exact decimal for revenue, show at least fractional leads
+        const periodLeadsExact = (o.leads || 0) * scale;
+        const periodRevenue    = o.payout * periodLeadsExact;
         return {
           ...o,
-          period_leads:   periodLeads,
+          period_leads:   periodLeadsExact,          // keep decimal for sorting
+          period_leads_display: periodLeadsExact < 1 && periodLeadsExact > 0
+            ? periodLeadsExact.toFixed(2)            // e.g. 0.18
+            : Math.round(periodLeadsExact),
           period_revenue: periodRevenue,
           est_revenue:    periodRevenue,
           sponsor_name:   sp?.name,
           sponsor_color:  sp?.color,
         };
       })
-      .filter(o => o.period_leads > 0)
       .sort((a, b) => b.period_revenue - a.period_revenue)
       .slice(0, 5);
 

@@ -508,8 +508,8 @@ function DashboardPage() {
                     <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
                     <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
                     <td><span className="payout-v">${o.payout}</span></td>
-                    <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.period_leads}</td>
-                    <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.period_revenue).toFixed(0)}</td>
+                    <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.period_leads_display ?? o.period_leads}</td>
+                    <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.period_revenue).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
