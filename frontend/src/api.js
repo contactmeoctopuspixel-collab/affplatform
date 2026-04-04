@@ -51,6 +51,7 @@ export const api = {
   hourly:         () => req("GET", "/stats/hourly"),
   subAffiliates:      (from, to) => req("GET",  `/stats/sub-affiliates?from=${from||''}&to=${to||''}`),
   importConversions:  (from, to) => req("POST", "/stats/import-conversions", { from, to }),
+  importCsv:          (csv)      => req("POST", "/stats/import-csv", { csv }),
 
   // AI
   aiRecommendations: (limit = 8) => req("GET", `/ai/recommendations?limit=${limit}`),

@@ -337,6 +337,66 @@ router.post("/import-conversions", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── IMPORT CSV FROM EVERFLOW ─────────────────────────────────────────────────
+// User exports CSV from Everflow Reports → Conversions, pastes here
+router.post("/import-csv", async (req, res) => {
+  try {
+    const { csv } = req.body;
+    if (!csv || typeof csv !== "string") return res.status(400).json({ error: "No CSV provided" });
+
+    const lines = csv.trim().split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return res.json({ imported: 0, error: "CSV too short" });
+
+    // Parse header — find Sub3, Revenue, Transaction ID, Date columns
+    const header = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/"/g, ""));
+    const col = (names) => {
+      for (const n of names) {
+        const i = header.findIndex(h => h.includes(n));
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
+
+    const iSub3  = col(["sub3", "sub 3", "sub_3", "sub id 3"]);
+    const iRev   = col(["revenue", "payout", "amount"]);
+    const iTxId  = col(["transaction", "tx_id", "conv_id", "conversion id"]);
+    const iDate  = col(["date", "conversion date", "conv date"]);
+
+    if (iSub3 < 0) return res.json({ imported: 0, error: "Colonne Sub3 introuvable dans le CSV" });
+
+    let imported = 0, skipped = 0;
+    for (let i = 1; i < lines.length; i++) {
+      // Handle quoted CSV fields
+      const parts = lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g) || lines[i].split(",");
+      const get = (idx) => idx >= 0 && parts[idx] ? parts[idx].replace(/"/g, "").trim() : "";
+
+      const sub3 = get(iSub3);
+      const subId = parseInt(sub3, 10);
+      if (!subId || !SUB_NAMES[subId]) { skipped++; continue; }
+
+      const revenue = parseFloat(get(iRev) || "0");
+      const txId    = get(iTxId) || `csv-${i}-${sub3}-${Date.now()}`;
+      const rawDate = get(iDate);
+      const createdAt = rawDate
+        ? new Date(rawDate.replace(/(\d+)\/(\d+)\/(\d+)(.*)/, "$3-$1-$2$4")).toISOString()
+        : new Date().toISOString();
+
+      const exists = await db.conversions.findOne({ transaction_id: txId });
+      if (exists) { skipped++; continue; }
+
+      await db.conversions.insert({
+        _id: txId, transaction_id: txId,
+        sub3: String(subId), revenue, offer_id: "",
+        sponsor: "csv-import", event_type: "cv",
+        created_at: createdAt,
+      });
+      imported++;
+    }
+
+    res.json({ imported, skipped, total: lines.length - 1 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── HOURLY ───────────────────────────────────────────────────────────────────
 router.get("/hourly", async (req, res) => {
   try {

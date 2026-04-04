@@ -266,6 +266,8 @@ function DashboardPage() {
   const [subData,    setSubData]    = useState(null);
   const [subImporting, setSubImporting] = useState(false);
   const [subImportMsg, setSubImportMsg] = useState("");
+  const [showCsvPaste, setShowCsvPaste] = useState(false);
+  const [csvText,      setCsvText]      = useState("");
   const [err,        setErr]        = useState("");
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pulse,      setPulse]      = useState(false);
@@ -654,37 +656,36 @@ function DashboardPage() {
               )}
             </div>
           ) : (
-            <div style={{padding:"20px 24px"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"var(--text)",marginBottom:16}}>
-                Kifach t-active Sub-Affiliate Leaderboard:
+            <div style={{padding:"16px 20px"}}>
+              <div style={{fontSize:12,fontWeight:700,color:"var(--text)",marginBottom:12}}>
+                Import CSV mn Everflow:
               </div>
-
-              <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                {/* Step 1 */}
-                <div style={{background:"var(--bg3)",borderRadius:8,padding:"12px 16px",borderLeft:"3px solid var(--cyan)"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"var(--cyan)",marginBottom:6}}>① Dkhol Everflow → Settings → Global Postback</div>
-                  <div style={{fontSize:10,color:"var(--text3)",marginBottom:8}}>Wla f kol offer: Offer → Edit → Postback URL</div>
-                  <div style={{background:"var(--bg2)",borderRadius:6,padding:"8px 12px",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--green)",wordBreak:"break-all",userSelect:"all",cursor:"text"}}>
-                    {window.location.origin}/api/postback?sub3={"{sub3}"}&revenue={"{payout}"}&offer_id={"{network_offer_id}"}&transaction_id={"{transaction_id}"}
-                  </div>
-                  <button className="btn btn-sm" style={{marginTop:8,fontSize:10}}
-                    onClick={()=>navigator.clipboard.writeText(`${window.location.origin}/api/postback?sub3={sub3}&revenue={payout}&offer_id={network_offer_id}&transaction_id={transaction_id}`)}>
-                    Copy URL
-                  </button>
-                </div>
-
-                {/* Step 2 */}
-                <div style={{background:"var(--bg3)",borderRadius:8,padding:"12px 16px",borderLeft:"3px solid var(--purple)"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"var(--purple)",marginBottom:4}}>② Wla import l-historique mn bouton</div>
-                  <div style={{fontSize:10,color:"var(--text3)"}}>Click "⟳ Import from Everflow" faw9 — kayji3awad yjerrab l'API dyal Everflow automatically</div>
-                </div>
-
-                {/* Result */}
-                <div style={{background:"var(--bg3)",borderRadius:8,padding:"10px 16px",borderLeft:"3px solid var(--green)"}}>
-                  <div style={{fontSize:10,color:"var(--text2)"}}>
-                    Ki t-setup postback → kol conversion f Everflow kayji automatically hna → tableau kaytzad real-time
-                  </div>
-                </div>
+              <div style={{fontSize:11,color:"var(--text3)",marginBottom:12,lineHeight:1.6}}>
+                <b style={{color:"var(--cyan)"}}>① </b>Dkhol Everflow → <b>Reports → Conversions</b><br/>
+                <b style={{color:"var(--cyan)"}}>② </b>ختار date range → click <b>Export / Download CSV</b><br/>
+                <b style={{color:"var(--cyan)"}}>③ </b>Fta7 le fichier CSV → Ctrl+A → Ctrl+C → paste hna 👇
+              </div>
+              <textarea
+                placeholder={"Date,Click Date,Offer,Revenue,...,Sub2,Sub3\n04/04/2026,...,longstring,6\n..."}
+                value={csvText}
+                onChange={e => setCsvText(e.target.value)}
+                style={{width:"100%",height:120,background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:8,padding:"10px 12px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:10,resize:"vertical",outline:"none"}}
+              />
+              <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
+                <button className="btn" style={{fontSize:11}}
+                  disabled={!csvText.trim()}
+                  onClick={async () => {
+                    setSubImporting(true); setSubImportMsg("");
+                    try {
+                      const r = await api.importCsv(csvText);
+                      setSubImportMsg(r.imported > 0 ? `✓ ${r.imported} conversions importées` : r.error || "Aucune donnée trouvée (vérifie la colonne Sub3)");
+                      if (r.imported > 0) { setCsvText(""); load(); }
+                    } catch(e) { setSubImportMsg("Erreur: " + e.message); }
+                    finally { setSubImporting(false); }
+                  }}>
+                  {subImporting ? "⟳ Import..." : "⟳ Importer CSV"}
+                </button>
+                {subImportMsg && <span style={{fontSize:11,color: subImportMsg.startsWith("✓") ? "var(--green)" : "var(--red)",fontFamily:"var(--font-mono)"}}>{subImportMsg}</span>}
               </div>
             </div>
           )}
