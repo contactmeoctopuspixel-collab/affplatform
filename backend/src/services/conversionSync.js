@@ -8,31 +8,67 @@ const SUB_NAMES = {
   16: "Kaoutar", 17: "Hafssa",
 };
 
-// All possible body/endpoint combinations to try
-function buildAttempts(from, to) {
-  const base = { from, to, timezone_id: 67, currency_id: "USD" };
-  const pag  = { page: 1, page_size: 500 };
+// Fetch affiliate account info to get network_affiliate_id
+async function fetchAffiliateInfo(apiKey) {
+  const headers = {
+    "X-Eflow-API-Key": apiKey,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  };
+  try {
+    const r = await fetch("https://api.eflow.team/v1/affiliates/account", { method: "GET", headers, timeout: 15000 });
+    if (!r.ok) return null;
+    const json = await r.json();
+    // Try various shapes: { affiliate_id, network_affiliate_id, id, account: { id } }
+    const id = json.network_affiliate_id ?? json.affiliate_id ?? json.id
+             ?? json.account?.network_affiliate_id ?? json.account?.id ?? null;
+    if (id) console.log(`[convSync] Affiliate ID resolved: ${id}`);
+    return { id, raw: json };
+  } catch { return null; }
+}
+
+// All possible body combinations to try — now parametrised with optional affiliate_id
+function buildAttempts(from, to, affiliateId) {
+  const base  = { from, to, timezone_id: 67, currency_id: "USD" };
+  const pag   = { page: 1, page_size: 500 };
+  const affF  = affiliateId ? { network_affiliate_id: [affiliateId] } : {};
+  const affF2 = affiliateId ? { affiliate_id: [affiliateId] } : {};
+
   return [
-    // POST variants
+    // ── With affiliate_id in filters (most likely required) ───────────────────
+    ...(affiliateId ? [
+      { method: "POST", path: "/v1/affiliates/reporting/conversions",
+        body: { ...base, filters: affF, page: 1, page_size: 500 } },
+      { method: "POST", path: "/v1/affiliates/reporting/conversions",
+        body: { ...base, filters: affF2, page: 1, page_size: 500 } },
+      { method: "POST", path: "/v1/affiliates/reporting/conversions",
+        body: { ...base, filters: affF, pagination: pag } },
+      { method: "POST", path: "/v1/affiliates/reporting/conversions",
+        body: { ...base, network_affiliate_id: affiliateId, page: 1, page_size: 500 } },
+      { method: "POST", path: "/v1/affiliates/reporting/conversions",
+        body: { ...base, affiliate_id: affiliateId, page: 1, page_size: 500 } },
+    ] : []),
+
+    // ── Without affiliate_id ──────────────────────────────────────────────────
+    { method: "POST", path: "/v1/affiliates/reporting/conversions",
+      body: { from, to, page: 1, page_size: 500 } },
+    { method: "POST", path: "/v1/affiliates/reporting/conversions",
+      body: { from, to, timezone_id: 67, page: 1, page_size: 500 } },
+    { method: "POST", path: "/v1/affiliates/reporting/conversions",
+      body: { ...base, page: 1, page_size: 500 } },
+    { method: "POST", path: "/v1/affiliates/reporting/conversions",
+      body: { ...base, filters: {}, page: 1, page_size: 500 } },
     { method: "POST", path: "/v1/affiliates/reporting/conversions",
       body: { ...base, filters: {}, pagination: pag } },
     { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, pagination: pag } },
+      body: { ...base, filters: {}, columns: ["sub3","revenue","transaction_id","conversion_date"], pagination: pag } },
     { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, filters: {}, columns: ["sub3","revenue","transaction_id"], pagination: pag } },
+      body: { from, to, timezone_id: 67, currency_id: "USD", report_type: "affiliate", page: 1, page_size: 500 } },
+    // ── Different page_size ───────────────────────────────────────────────────
     { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, filters: { event_type: "cv" }, pagination: pag } },
+      body: { from, to, timezone_id: 67, page: 1, page_size: 25 } },
     { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { from, to, timezone_id: 67 } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversions",
-      body: { ...base, event_type: "cv", page: 1, page_size: 500 } },
-    { method: "POST", path: "/v1/affiliates/reporting/conversion",
-      body: { ...base, filters: {}, pagination: pag } },
-    // GET variants
-    { method: "GET", path: `/v1/affiliates/reporting/conversions?from=${from}&to=${to}&timezone_id=67&currency_id=USD&page=1&page_size=500` },
-    { method: "GET", path: `/v1/affiliates/conversions?from=${from}&to=${to}&timezone_id=67&page=1&page_size=500` },
-    { method: "GET", path: `/v1/affiliates/reporting/conversion?from=${from}&to=${to}&timezone_id=67&currency_id=USD&page=1&page_size=500` },
-    { method: "GET", path: `/v1/affiliates/reporting/conversions?from=${from}&to=${to}&page=1&page_size=500` },
+      body: { from, to, page: 1, limit: 500 } },
   ];
 }
 
@@ -41,12 +77,11 @@ function extractRows(json) {
   if (!json || typeof json !== "object") return null;
   const candidates = [
     json.conversions, json.conversion, json.data,
-    json.performance, json.rows, json.results,
+    json.performance, json.rows, json.results, json.report,
   ];
   for (const c of candidates) {
     if (Array.isArray(c) && c.length > 0) return c;
   }
-  // If root is array
   if (Array.isArray(json)) return json;
   return null;
 }
@@ -65,7 +100,12 @@ async function detectAndFetch(apiKey, from, to) {
     "Content-Type": "application/json",
     "Accept": "application/json",
   };
-  const attempts = buildAttempts(from, to);
+
+  // Step 1: resolve affiliate ID (used to build more accurate request bodies)
+  const accInfo = await fetchAffiliateInfo(apiKey);
+  const affiliateId = accInfo?.id ?? null;
+
+  const attempts = buildAttempts(from, to, affiliateId);
 
   for (const att of attempts) {
     try {
@@ -79,7 +119,7 @@ async function detectAndFetch(apiKey, from, to) {
       if (!r.ok) {
         let errBody = "";
         try { errBody = await r.text(); } catch {}
-        console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → ${r.status}: ${errBody.slice(0, 120)}`);
+        console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → ${r.status}: ${errBody.slice(0, 150)}`);
         continue;
       }
 
@@ -91,11 +131,10 @@ async function detectAndFetch(apiKey, from, to) {
       const json = await r.json();
       const rows = extractRows(json);
       if (!rows) {
-        console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → 200 JSON but no rows array. Keys: ${Object.keys(json).join(",")}`);
+        console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → 200 JSON but no rows. Keys: ${Object.keys(json).join(",")}`);
         continue;
       }
 
-      // Check first row has sub3 data
       const sample = rows[0];
       if (!sample) continue;
 
@@ -150,7 +189,7 @@ async function saveConversions(rows, sponsorName) {
 
 // Main sync — called on startup + every N minutes
 async function syncConversions(daysBack = 30) {
-  const today   = new Date().toISOString().slice(0, 10);
+  const today    = new Date().toISOString().slice(0, 10);
   const fromDate = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10);
 
   const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: "" } });
