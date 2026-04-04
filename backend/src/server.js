@@ -26,6 +26,9 @@ wss.on("connection", (ws) => {
   ws.on("error", (e) => console.error("WS error:", e.message));
 });
 
+// ── Trust proxy (nginx reverse proxy) ─────────────────────────────────────────
+app.set("trust proxy", 1);
+
 // ── Middleware ─────────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({

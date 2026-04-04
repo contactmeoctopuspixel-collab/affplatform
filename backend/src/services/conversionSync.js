@@ -74,26 +74,37 @@ async function detectAndFetch(apiKey, from, to) {
         : { method: "POST", headers, body: JSON.stringify(att.body), timeout: 20000 };
 
       const r = await fetch(`https://api.eflow.team${att.path}`, opts);
-      if (!r.ok) continue;
-
       const ct = r.headers.get("content-type") || "";
-      if (!ct.includes("application/json")) continue;
+
+      if (!r.ok) {
+        let errBody = "";
+        try { errBody = await r.text(); } catch {}
+        console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → ${r.status}: ${errBody.slice(0, 120)}`);
+        continue;
+      }
+
+      if (!ct.includes("application/json")) {
+        console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → 200 but content-type: ${ct}`);
+        continue;
+      }
 
       const json = await r.json();
       const rows = extractRows(json);
-      if (!rows) continue;
+      if (!rows) {
+        console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → 200 JSON but no rows array. Keys: ${Object.keys(json).join(",")}`);
+        continue;
+      }
 
       // Check first row has sub3 data
       const sample = rows[0];
       if (!sample) continue;
 
       const sub3val = getSub3(sample);
-      // Acceptable if sub3 exists (even empty string) — we found the right endpoint
       console.log(`[convSync] ✓ Found working endpoint: ${att.method} ${att.path.split("?")[0]} — ${rows.length} rows, sample sub3="${sub3val}"`);
       return { rows, attempt: att };
 
     } catch (e) {
-      // timeout or network error — continue
+      console.log(`[convSync] ${att.method} ${att.path.split("?")[0]} → ERROR: ${e.message}`);
     }
   }
   return null;
