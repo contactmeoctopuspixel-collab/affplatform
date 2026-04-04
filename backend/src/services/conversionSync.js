@@ -136,11 +136,16 @@ async function saveConversions(rows, sponsorName) {
     if (exists) continue;
 
     const revenue = parseFloat(row.revenue ?? row.payout ?? 0);
-    const rawDate = row.conversion_date ?? row.date ?? row.created_at ?? row.datetime ?? "";
+    // Everflow returns unix timestamp in seconds as conversion_unix_timestamp
     let createdAt;
-    try {
-      createdAt = rawDate ? new Date(rawDate).toISOString() : new Date().toISOString();
-    } catch { createdAt = new Date().toISOString(); }
+    if (row.conversion_unix_timestamp) {
+      createdAt = new Date(row.conversion_unix_timestamp * 1000).toISOString();
+    } else {
+      const rawDate = row.conversion_date ?? row.date ?? row.created_at ?? row.datetime ?? "";
+      try {
+        createdAt = rawDate ? new Date(rawDate).toISOString() : new Date().toISOString();
+      } catch { createdAt = new Date().toISOString(); }
+    }
 
     await db.conversions.insert({
       _id: txId,

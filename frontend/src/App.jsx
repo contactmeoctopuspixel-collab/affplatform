@@ -485,42 +485,6 @@ function DashboardPage() {
         ))}
       </div>
 
-      {/* Live indicator */}
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-        <span style={{width:7,height:7,borderRadius:"50%",background:"var(--green)",display:"inline-block",animation:"pulse 2s infinite"}}/>
-        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-          LIVE — auto-refreshes every 2 min · last: {lastUpdate?.toLocaleTimeString() || "—"}
-        </span>
-        <button className="btn btn-sm" style={{marginLeft:"auto",fontSize:10}} onClick={load}>⟳ Refresh now</button>
-      </div>
-
-      {/* Top Offers — just below LIVE bar, date-filtered */}
-      {topOffers?.length > 0 && (
-        <div className="card" style={{marginBottom:16}}>
-          <div className="card-head">
-            <span className="card-title">Top Offers by Revenue</span>
-            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>période sélectionnée</span>
-          </div>
-          <div className="tbl-wrap">
-            <table>
-              <thead><tr><th>ID</th><th>Offer</th><th>Sponsor</th><th>Payout</th><th>Leads</th><th>Revenue</th></tr></thead>
-              <tbody>
-                {topOffers.map(o => (
-                  <tr key={o.id}>
-                    <td><span className="offer-id">{o.external_id || o.id}</span></td>
-                    <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
-                    <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
-                    <td><span className="payout-v">${o.payout}</span></td>
-                    <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.leads}</td>
-                    <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.est_revenue).toFixed(0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Charts */}
       <div className="grid-2 mb-6">
         <div className="card">
@@ -669,12 +633,48 @@ function DashboardPage() {
                 No conversions found for this period.
               </div>
               <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>
-                Auto-sync runs every 2 min · Click "Sync Now" to fetch immediately
+                Auto-sync runs every 15 min · Click "Sync Now" to fetch immediately
               </div>
             </div>
           )}
         </div>
       </>
+
+      {/* Live indicator */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,marginBottom:14}}>
+        <span style={{width:7,height:7,borderRadius:"50%",background:"var(--green)",display:"inline-block",animation:"pulse 2s infinite"}}/>
+        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+          LIVE — auto-refreshes every 2 min · last: {lastUpdate?.toLocaleTimeString() || "—"}
+        </span>
+        <button className="btn btn-sm" style={{marginLeft:"auto",fontSize:10}} onClick={load}>⟳ Refresh now</button>
+      </div>
+
+      {/* Top Offers — date-filtered */}
+      {topOffers?.length > 0 && (
+        <div className="card" style={{marginBottom:16}}>
+          <div className="card-head">
+            <span className="card-title">Top Offers by Revenue</span>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>période sélectionnée</span>
+          </div>
+          <div className="tbl-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Offer</th><th>Sponsor</th><th>Payout</th><th>Leads</th><th>Revenue</th></tr></thead>
+              <tbody>
+                {topOffers.map(o => (
+                  <tr key={o.id}>
+                    <td><span className="offer-id">{o.external_id || o.id}</span></td>
+                    <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
+                    <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
+                    <td><span className="payout-v">${o.payout}</span></td>
+                    <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.leads}</td>
+                    <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.est_revenue).toFixed(0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </>
   );
 }
