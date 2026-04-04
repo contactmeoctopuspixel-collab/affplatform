@@ -276,12 +276,20 @@ router.get("/sub-affiliates", async (req, res) => {
           }),
           timeout: 15000,
         });
-        if (!r.ok) continue;
+        if (!r.ok) { console.log(`[sub3] ${sp.name} HTTP ${r.status}`); continue; }
         const ct = r.headers.get("content-type") || "";
         if (!ct.includes("application/json")) continue;
         const data = await r.json();
+        // Log first row to see the actual field names from Everflow
+        if (data.performance && data.performance.length > 0) {
+          console.log(`[sub3] ${sp.name} sample row keys:`, JSON.stringify(Object.keys(data.performance[0])));
+          console.log(`[sub3] ${sp.name} sample row:`, JSON.stringify(data.performance[0]));
+        } else {
+          console.log(`[sub3] ${sp.name} empty performance. Keys in response:`, JSON.stringify(Object.keys(data)));
+        }
         for (const row of (data.performance || [])) {
-          const rawSub = row.sub3 ?? row.sub_id_3 ?? "";
+          // Try all known Everflow sub field names
+          const rawSub = row.sub3 ?? row.sub_id_3 ?? row.sub ?? row["sub 3"] ?? "";
           const subId = parseInt(String(rawSub), 10);
           if (!subId || !SUB_NAMES[subId]) continue;
           if (!totals[subId]) totals[subId] = { id: subId, name: SUB_NAMES[subId], leads: 0, clicks: 0, revenue: 0 };
