@@ -134,29 +134,35 @@ router.get("/dashboard", async (req, res) => {
       weeklyChart = Object.values(byDate);
     }
 
-    // ── Top offers — date-filtered via proportional scaling ───────────────────
-    // For each sponsor, we know the period leads (from sponsorBreakdownMap).
-    // We scale each offer's stored leads by (period_leads / total_stored_leads).
+    // ── Top offers — date-filtered ────────────────────────────────────────────
     const offers = await db.offers.find({ status: "active" });
     const spMap  = Object.fromEntries(sponsors.map(s => [s.id, s]));
+
+    // Sum all offers leads per sponsor → true historical denominator
+    const offerLeadsBySponsor = {};
+    for (const o of offers) {
+      offerLeadsBySponsor[o.sponsor_id] = (offerLeadsBySponsor[o.sponsor_id] || 0) + (o.leads || 0);
+    }
+
     const topOffers = offers
       .map(o => {
-        const sp = spMap[o.sponsor_id];
-        const spTotal  = sp?.leads || 0;
-        const spPeriod = sponsorBreakdownMap[o.sponsor_id]?.leads || 0;
-        // Scale offer leads by period ratio
-        const scale = spTotal > 0 ? spPeriod / spTotal : 0;
-        const periodLeads = Math.round((o.leads || 0) * scale);
+        const sp        = spMap[o.sponsor_id];
+        const spTotal   = offerLeadsBySponsor[o.sponsor_id] || 0; // sum of all offers leads for this sponsor
+        const spPeriod  = sponsorBreakdownMap[o.sponsor_id]?.leads || 0;
+        const scale     = spTotal > 0 ? spPeriod / spTotal : 0;
+        const periodLeads   = Math.round((o.leads || 0) * scale);
+        const periodRevenue = o.payout * periodLeads;
         return {
           ...o,
-          period_leads: periodLeads,
-          est_revenue: o.payout * periodLeads,
-          sponsor_name:  sp?.name,
-          sponsor_color: sp?.color,
+          period_leads:   periodLeads,
+          period_revenue: periodRevenue,
+          est_revenue:    periodRevenue,
+          sponsor_name:   sp?.name,
+          sponsor_color:  sp?.color,
         };
       })
       .filter(o => o.period_leads > 0)
-      .sort((a, b) => b.est_revenue - a.est_revenue)
+      .sort((a, b) => b.period_revenue - a.period_revenue)
       .slice(0, 5);
 
     // ── Sponsor breakdown ─────────────────────────────────────────────────────

@@ -491,6 +491,33 @@ function DashboardPage() {
         <button className="btn btn-sm" style={{marginLeft:"auto",fontSize:10}} onClick={load}>⟳ Refresh now</button>
       </div>
 
+      {/* Top Offers — just below LIVE bar, date-filtered */}
+      {topOffers?.length > 0 && (
+        <div className="card" style={{marginBottom:16}}>
+          <div className="card-head">
+            <span className="card-title">Top Offers by Revenue</span>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>période sélectionnée</span>
+          </div>
+          <div className="tbl-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Offer</th><th>Sponsor</th><th>Payout</th><th>Leads</th><th>Revenue</th></tr></thead>
+              <tbody>
+                {topOffers.map(o => (
+                  <tr key={o.id}>
+                    <td><span className="offer-id">{o.external_id || o.id}</span></td>
+                    <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
+                    <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
+                    <td><span className="payout-v">${o.payout}</span></td>
+                    <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.period_leads}</td>
+                    <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.period_revenue).toFixed(0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Charts */}
       <div className="grid-2 mb-6">
         <div className="card">
@@ -568,31 +595,6 @@ function DashboardPage() {
         </>
       )}
 
-      {/* Top Offers */}
-      {topOffers?.length > 0 && (
-        <>
-          <div className="sec-title">Top Offers by Revenue</div>
-          <div className="card">
-            <div className="tbl-wrap">
-              <table>
-                <thead><tr><th>ID</th><th>Offer</th><th>Sponsor</th><th>Payout</th><th>Leads (période)</th><th>Est. Revenue</th></tr></thead>
-                <tbody>
-                  {topOffers.map(o => (
-                    <tr key={o.id}>
-                      <td><span className="offer-id">{o.external_id || o.id}</span></td>
-                      <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
-                      <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
-                      <td><span className="payout-v">${o.payout}</span></td>
-                      <td className="mono">{o.period_leads ?? o.leads}</td>
-                      <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.est_revenue).toFixed(0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Sub-Affiliate Leaderboard — always visible */}
       <>
