@@ -263,11 +263,10 @@ function LoginPage({ onLogin }) {
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function DashboardPage() {
   const [data,       setData]       = useState(null);
-  const [subData,    setSubData]    = useState(null);
-  const [subImporting, setSubImporting] = useState(false);
-  const [subImportMsg, setSubImportMsg] = useState("");
-  const [showCsvPaste, setShowCsvPaste] = useState(false);
-  const [csvText,      setCsvText]      = useState("");
+  const [subData,      setSubData]      = useState(null);
+  const [subSyncing,   setSubSyncing]   = useState(false);
+  const [subSyncMsg,   setSubSyncMsg]   = useState("");
+  const [subSyncInfo,  setSubSyncInfo]  = useState(null);
   const [err,        setErr]        = useState("");
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pulse,      setPulse]      = useState(false);
@@ -310,12 +309,14 @@ function DashboardPage() {
 
   const load = useCallback(async () => {
     try {
-      const [d, sub] = await Promise.all([
+      const [d, sub, syncInfo] = await Promise.all([
         api.dashboard(dateFrom, dateTo),
         api.subAffiliates(dateFrom, dateTo).catch(() => null),
+        api.convSyncStatus().catch(() => null),
       ]);
       setData(d);
       if (sub) setSubData(sub);
+      if (syncInfo) setSubSyncInfo(syncInfo);
       setLastUpdate(new Date());
       setPulse(true);
       setTimeout(() => setPulse(false), 600);
@@ -598,23 +599,30 @@ function DashboardPage() {
       )}
 
 
-      {/* Sub-Affiliate Leaderboard — always visible */}
+      {/* Sub-Affiliate Leaderboard — auto-sync */}
       <>
         <div className="sec-title" style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <span>Sub-Affiliate Leaderboard</span>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {subImportMsg && <span style={{fontSize:11,color:"var(--green)",fontFamily:"var(--font-mono)"}}>{subImportMsg}</span>}
-            <button className="btn btn-sm" disabled={subImporting} style={{fontSize:11}}
+            {subSyncInfo?.lastSync && (
+              <span style={{fontSize:10,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>
+                Last sync: {new Date(subSyncInfo.lastSync).toLocaleTimeString()}
+                {subSyncInfo.lastSaved > 0 && <> · +{subSyncInfo.lastSaved} new</>}
+              </span>
+            )}
+            {subSyncMsg && <span style={{fontSize:11,color: subSyncMsg.startsWith("✓") ? "var(--green)" : "var(--orange)",fontFamily:"var(--font-mono)"}}>{subSyncMsg}</span>}
+            <button className="btn btn-sm" disabled={subSyncing} style={{fontSize:11}}
               onClick={async () => {
-                setSubImporting(true); setSubImportMsg("");
+                setSubSyncing(true); setSubSyncMsg("");
                 try {
-                  const r = await api.importConversions(dateFrom, dateTo);
-                  setSubImportMsg(r.imported > 0 ? `✓ ${r.imported} imported` : r.errors?.[0] || "No new data");
-                  if (r.imported > 0) load();
-                } catch(e) { setSubImportMsg("Error: " + e.message); }
-                finally { setSubImporting(false); }
+                  const r = await api.convSyncNow();
+                  setSubSyncMsg(r.lastSaved > 0 ? `✓ +${r.lastSaved} new conversions` : "✓ Up to date");
+                  if (r.lastSaved > 0) load();
+                  else setSubSyncInfo(r);
+                } catch(e) { setSubSyncMsg("Error: " + e.message); }
+                finally { setSubSyncing(false); }
               }}>
-              {subImporting ? "⟳ Importing..." : "⟳ Import from Everflow"}
+              {subSyncing ? "⟳ Syncing..." : "⟳ Sync Now"}
             </button>
           </div>
         </div>
@@ -656,36 +664,12 @@ function DashboardPage() {
               )}
             </div>
           ) : (
-            <div style={{padding:"16px 20px"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"var(--text)",marginBottom:12}}>
-                Import CSV mn Everflow:
+            <div style={{padding:"20px",textAlign:"center"}}>
+              <div style={{fontSize:13,color:"var(--text2)",marginBottom:8}}>
+                No conversions found for this period.
               </div>
-              <div style={{fontSize:11,color:"var(--text3)",marginBottom:12,lineHeight:1.6}}>
-                <b style={{color:"var(--cyan)"}}>① </b>Dkhol Everflow → <b>Reports → Conversions</b><br/>
-                <b style={{color:"var(--cyan)"}}>② </b>ختار date range → click <b>Export / Download CSV</b><br/>
-                <b style={{color:"var(--cyan)"}}>③ </b>Fta7 le fichier CSV → Ctrl+A → Ctrl+C → paste hna 👇
-              </div>
-              <textarea
-                placeholder={"Date,Click Date,Offer,Revenue,...,Sub2,Sub3\n04/04/2026,...,longstring,6\n..."}
-                value={csvText}
-                onChange={e => setCsvText(e.target.value)}
-                style={{width:"100%",height:120,background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:8,padding:"10px 12px",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:10,resize:"vertical",outline:"none"}}
-              />
-              <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
-                <button className="btn" style={{fontSize:11}}
-                  disabled={!csvText.trim()}
-                  onClick={async () => {
-                    setSubImporting(true); setSubImportMsg("");
-                    try {
-                      const r = await api.importCsv(csvText);
-                      setSubImportMsg(r.imported > 0 ? `✓ ${r.imported} conversions importées` : r.error || "Aucune donnée trouvée (vérifie la colonne Sub3)");
-                      if (r.imported > 0) { setCsvText(""); load(); }
-                    } catch(e) { setSubImportMsg("Erreur: " + e.message); }
-                    finally { setSubImporting(false); }
-                  }}>
-                  {subImporting ? "⟳ Import..." : "⟳ Importer CSV"}
-                </button>
-                {subImportMsg && <span style={{fontSize:11,color: subImportMsg.startsWith("✓") ? "var(--green)" : "var(--red)",fontFamily:"var(--font-mono)"}}>{subImportMsg}</span>}
+              <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>
+                Auto-sync runs every 2 min · Click "Sync Now" to fetch immediately
               </div>
             </div>
           )}

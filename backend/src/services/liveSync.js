@@ -1,10 +1,13 @@
 // src/services/liveSync.js
 // Auto-sync every N minutes + push live events via WebSocket
 const { fetchAndSync } = require("./apiProxy");
+const { syncConversions } = require("./conversionSync");
 const db = require("../db");
 
 let wss = null;
 let syncInterval = null;
+let lastConvSync = null;
+let lastConvCount = 0;
 
 function broadcast(data) {
   if (!wss) return;
@@ -69,20 +72,44 @@ async function syncAllSponsors() {
   return results;
 }
 
+// Sync conversions (sub3 data) from Everflow and broadcast result
+async function runConversionSync() {
+  try {
+    const saved = await syncConversions(30);
+    lastConvSync  = new Date().toISOString();
+    lastConvCount = saved;
+    if (saved > 0) {
+      broadcast({ type: "conversions_synced", saved, timestamp: lastConvSync });
+      console.log(`[convSync] Broadcast: ${saved} new conversions`);
+    }
+  } catch (e) {
+    console.error("[convSync] runConversionSync error:", e.message);
+  }
+}
+
+function getConvSyncStatus() {
+  return { lastSync: lastConvSync, lastSaved: lastConvCount };
+}
+
 // Start auto-sync loop
 function startLiveSync(wssInstance, intervalMinutes = 2) {
   wss = wssInstance;
   console.log(`⚡ Live sync started — every ${intervalMinutes} min`);
 
-  // Initial sync after 5 seconds
+  // Initial sponsor sync after 5 seconds
   setTimeout(syncAllSponsors, 5000);
+  // Initial conversion sync after 15 seconds (give sponsors time first)
+  setTimeout(runConversionSync, 15000);
 
   // Then every N minutes
-  syncInterval = setInterval(syncAllSponsors, intervalMinutes * 60 * 1000);
+  syncInterval = setInterval(() => {
+    syncAllSponsors();
+    runConversionSync();
+  }, intervalMinutes * 60 * 1000);
 }
 
 function stopLiveSync() {
   if (syncInterval) clearInterval(syncInterval);
 }
 
-module.exports = { startLiveSync, stopLiveSync, syncAllSponsors, pushLiveEvent, broadcast };
+module.exports = { startLiveSync, stopLiveSync, syncAllSponsors, pushLiveEvent, broadcast, runConversionSync, getConvSyncStatus };

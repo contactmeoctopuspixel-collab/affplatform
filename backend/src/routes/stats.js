@@ -413,4 +413,20 @@ router.get("/hourly", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── CONVERSION SYNC STATUS + MANUAL TRIGGER ──────────────────────────────────
+router.get("/conv-sync-status", (req, res) => {
+  try {
+    const { getConvSyncStatus } = require("../services/liveSync");
+    res.json(getConvSyncStatus());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post("/conv-sync-now", async (req, res) => {
+  try {
+    const { runConversionSync, getConvSyncStatus } = require("../services/liveSync");
+    await runConversionSync();
+    res.json({ ok: true, ...getConvSyncStatus() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
