@@ -237,7 +237,7 @@ router.get("/sub-affiliates/debug", async (req, res) => {
       const headers = { "X-Eflow-API-Key": sp.api_key, "Content-Type": "application/json", "Accept": "application/json" };
       const body = JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 50 } });
       try {
-        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub2", { method: "POST", headers, body, timeout: 15000 });
+        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub3", { method: "POST", headers, body, timeout: 15000 });
         const text = await r.text();
         let json = null; try { json = JSON.parse(text); } catch {}
         results.push({ sponsor: sp.name, platform: sp.platform, status: r.status, sample: json ? (json.performance || []).slice(0, 3) : text.slice(0, 200), summary: json?.summary });
@@ -267,7 +267,7 @@ router.get("/sub-affiliates", async (req, res) => {
           "Content-Type": "application/json",
           "Accept": "application/json",
         };
-        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub2", {
+        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub3", {
           method: "POST", headers,
           body: JSON.stringify({
             from: fromDate, to: toDate,
@@ -281,8 +281,7 @@ router.get("/sub-affiliates", async (req, res) => {
         if (!ct.includes("application/json")) continue;
         const data = await r.json();
         for (const row of (data.performance || [])) {
-          // sub2 can be a string or number — try both
-          const rawSub = row.sub2 ?? row.sub_id_2 ?? row.sub_id ?? "";
+          const rawSub = row.sub3 ?? row.sub_id_3 ?? "";
           const subId = parseInt(String(rawSub), 10);
           if (!subId || !SUB_NAMES[subId]) continue;
           if (!totals[subId]) totals[subId] = { id: subId, name: SUB_NAMES[subId], leads: 0, clicks: 0, revenue: 0 };
