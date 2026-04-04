@@ -46,6 +46,7 @@ function buildAttempts(from, to) {
 }
 
 // Extract conversions array from any response shape
+// Returns [] if endpoint works but no data, null if wrong format
 function extractRows(json) {
   if (!json || typeof json !== "object") return null;
   const candidates = [
@@ -53,7 +54,7 @@ function extractRows(json) {
     json.performance, json.rows, json.results, json.report,
   ];
   for (const c of candidates) {
-    if (Array.isArray(c) && c.length > 0) return c;
+    if (Array.isArray(c)) return c; // return even if empty — endpoint works
   }
   if (Array.isArray(json)) return json;
   return null;
