@@ -30,42 +30,60 @@ router.get("/dashboard", async (req, res) => {
         sponsorBreakdownMap[sp.id] = { revenue: 0, clicks: 0, leads: 0 };
         continue;
       }
-      try {
-        const headers = {
-          "X-Eflow-API-Key": sp.api_key,
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        };
-        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/daily", {
-          method: "POST", headers,
-          body: JSON.stringify({
-            from: fromDate, to: toDate,
-            timezone_id: 67, currency_id: "USD",
-            filters: {}, pagination: { page: 1, page_size: 100 },
-          }),
-          timeout: 15000,
-        });
-        if (r.ok) {
-          const ct = r.headers.get("content-type") || "";
-          if (ct.includes("application/json")) {
-            const data = await r.json();
-            const s = data?.summary || {};
-            const rev = s.revenue      || 0;
-            const clk = s.total_click  || 0;
-            const ld  = s.cv           || 0;
-            sponsorBreakdownMap[sp.id] = { revenue: rev, clicks: clk, leads: ld };
-            totalRevenue += rev;
-            totalClicks  += clk;
-            totalLeads   += ld;
-            continue;
+
+      // Only call eflow reporting/daily for pure Everflow sponsors.
+      // BizAglo/SphinxAds/Commission Shepherd use different internal endpoints —
+      // their data is kept fresh by the auto-sync (every 2 min) stored in DB.
+      if (sp.platform === "everflow") {
+        try {
+          const headers = {
+            "X-Eflow-API-Key": sp.api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          };
+          const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/daily", {
+            method: "POST", headers,
+            body: JSON.stringify({
+              from: fromDate, to: toDate,
+              timezone_id: 67, currency_id: "USD",
+              filters: {}, pagination: { page: 1, page_size: 100 },
+            }),
+            timeout: 15000,
+          });
+          if (r.ok) {
+            const ct = r.headers.get("content-type") || "";
+            if (ct.includes("application/json")) {
+              const data = await r.json();
+              const s = data?.summary || {};
+              const rev = s.revenue      || 0;
+              const clk = s.total_click  || 0;
+              const ld  = s.cv           || 0;
+              // Use API result — but if it's all 0 and DB has real data, prefer DB
+              const dbRev = sp.revenue || 0;
+              const dbClk = sp.clicks  || 0;
+              const dbLd  = sp.leads   || 0;
+              const finalRev = rev > 0 ? rev : dbRev;
+              const finalClk = clk > 0 ? clk : dbClk;
+              const finalLd  = ld  > 0 ? ld  : dbLd;
+              sponsorBreakdownMap[sp.id] = { revenue: finalRev, clicks: finalClk, leads: finalLd };
+              totalRevenue += finalRev;
+              totalClicks  += finalClk;
+              totalLeads   += finalLd;
+              continue;
+            }
           }
-        }
-      } catch {}
-      // Fallback to stored data
-      sponsorBreakdownMap[sp.id] = { revenue: sp.revenue||0, clicks: sp.clicks||0, leads: sp.leads||0 };
-      totalRevenue += sp.revenue || 0;
-      totalClicks  += sp.clicks  || 0;
-      totalLeads   += sp.leads   || 0;
+        } catch {}
+      }
+
+      // For all other platforms (bizaglo, sphinxads, commissionshepherd, etc.)
+      // use stored DB values kept fresh by auto-sync
+      const rev = sp.revenue || 0;
+      const clk = sp.clicks  || 0;
+      const ld  = sp.leads   || 0;
+      sponsorBreakdownMap[sp.id] = { revenue: rev, clicks: clk, leads: ld };
+      totalRevenue += rev;
+      totalClicks  += clk;
+      totalLeads   += ld;
     }
 
     // ── Chart: real daily performance from API ────────────────────────────────
@@ -205,6 +223,32 @@ const SUB_NAMES = {
   17: "Hafssa",
 };
 
+// Debug: returns raw Everflow sub2 API response — call GET /api/stats/sub-affiliates/debug
+router.get("/sub-affiliates/debug", async (req, res) => {
+  try {
+    const today   = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+    const fromDate = req.query.from || weekAgo;
+    const toDate   = req.query.to   || today;
+    const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: null } });
+    const results = [];
+    for (const sp of sponsors) {
+      if (!sp.api_key || sp.platform === "adsurf") continue;
+      const headers = { "X-Eflow-API-Key": sp.api_key, "Content-Type": "application/json", "Accept": "application/json" };
+      const body = JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 50 } });
+      try {
+        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub2", { method: "POST", headers, body, timeout: 15000 });
+        const text = await r.text();
+        let json = null; try { json = JSON.parse(text); } catch {}
+        results.push({ sponsor: sp.name, platform: sp.platform, status: r.status, sample: json ? (json.performance || []).slice(0, 3) : text.slice(0, 200), summary: json?.summary });
+      } catch (e) {
+        results.push({ sponsor: sp.name, error: e.message });
+      }
+    }
+    res.json({ results, dateRange: { from: fromDate, to: toDate } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get("/sub-affiliates", async (req, res) => {
   try {
     const today   = new Date().toISOString().slice(0, 10);
@@ -213,7 +257,7 @@ router.get("/sub-affiliates", async (req, res) => {
     const toDate   = req.query.to   || today;
 
     const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: null } });
-    const totals = {}; // sub_id => { name, leads, clicks, revenue }
+    const totals = {};
 
     for (const sp of sponsors) {
       if (!sp.api_key || sp.platform === "adsurf") continue;
@@ -228,7 +272,7 @@ router.get("/sub-affiliates", async (req, res) => {
           body: JSON.stringify({
             from: fromDate, to: toDate,
             timezone_id: 67, currency_id: "USD",
-            filters: {}, pagination: { page: 1, page_size: 50 },
+            filters: {}, pagination: { page: 1, page_size: 100 },
           }),
           timeout: 15000,
         });
@@ -237,7 +281,9 @@ router.get("/sub-affiliates", async (req, res) => {
         if (!ct.includes("application/json")) continue;
         const data = await r.json();
         for (const row of (data.performance || [])) {
-          const subId = parseInt(row.sub2, 10);
+          // sub2 can be a string or number — try both
+          const rawSub = row.sub2 ?? row.sub_id_2 ?? row.sub_id ?? "";
+          const subId = parseInt(String(rawSub), 10);
           if (!subId || !SUB_NAMES[subId]) continue;
           if (!totals[subId]) totals[subId] = { id: subId, name: SUB_NAMES[subId], leads: 0, clicks: 0, revenue: 0 };
           totals[subId].leads   += row.reporting?.cv          || 0;
