@@ -1540,13 +1540,26 @@ function AIPage({ toast }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const VALID_PAGES = ["dashboard","sponsors","offers","tracking","ai","settings"];
+  function pageFromPath() {
+    const p = window.location.pathname.replace(/^\//, "").split("/")[0];
+    return VALID_PAGES.includes(p) ? p : "dashboard";
+  }
+
   const [user,        setUser]        = useState(null);
-  const [page,        setPage]        = useState("dashboard");
+  const [page,        setPage]        = useState(pageFromPath);
   const [time,        setTime]        = useState(new Date());
   const [liveEvents,  setLiveEvents]  = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
   const [toast,       setToastMsg]    = useState(null);
   const wsRef = useRef(null);
+
+  // URL popstate (browser back/forward)
+  useEffect(() => {
+    const onPop = () => setPage(pageFromPath());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   // Check existing token
   useEffect(() => {
@@ -1645,7 +1658,7 @@ export default function App() {
           <nav className="nav">
             <div className="nav-sec">Navigation</div>
             {nav.map(n=>(
-              <div key={n.id} className={`nav-item${page===n.id?" active":""}`} onClick={()=>setPage(n.id)}>
+              <div key={n.id} className={`nav-item${page===n.id?" active":""}`} onClick={()=>{ setPage(n.id); window.history.pushState({}, "", "/" + n.id); }}>
                 <span style={{width:18,textAlign:"center"}}>{n.icon}</span>{n.label}
                 {n.id==="tracking" && liveEvents.length>0 && <span className="nav-badge">{liveEvents.length}</span>}
               </div>
