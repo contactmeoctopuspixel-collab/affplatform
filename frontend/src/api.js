@@ -46,9 +46,10 @@ export const api = {
   deleteOffer: (id)          => req("DELETE", `/offers/${id}`),
 
   // Stats
-  dashboard: (from, to) => req("GET", `/stats/dashboard?from=${from||''}&to=${to||''}`),  
-  events:    (limit = 30) => req("GET", `/stats/events?limit=${limit}`),
-  hourly:    () => req("GET", "/stats/hourly"),
+  dashboard:      (from, to) => req("GET", `/stats/dashboard?from=${from||''}&to=${to||''}`),
+  events:         (limit = 30) => req("GET", `/stats/events?limit=${limit}`),
+  hourly:         () => req("GET", "/stats/hourly"),
+  subAffiliates:  (from, to) => req("GET", `/stats/sub-affiliates?from=${from||''}&to=${to||''}`),
 
   // AI
   aiRecommendations: (limit = 8) => req("GET", `/ai/recommendations?limit=${limit}`),

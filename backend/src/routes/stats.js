@@ -193,6 +193,65 @@ router.post("/events", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── SUB-AFFILIATE LEADERBOARD ───────────────────────────────────────────────
+const SUB_NAMES = {
+  2:  "Oussama",
+  3:  "Mohammed",
+  4:  "Marouan",
+  5:  "Imad",
+  6:  "Mariam",
+  7:  "Yousra",
+  16: "Kaoutar",
+  17: "Hafssa",
+};
+
+router.get("/sub-affiliates", async (req, res) => {
+  try {
+    const today   = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+    const fromDate = req.query.from || weekAgo;
+    const toDate   = req.query.to   || today;
+
+    const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: null } });
+    const totals = {}; // sub_id => { name, leads, clicks, revenue }
+
+    for (const sp of sponsors) {
+      if (!sp.api_key || sp.platform === "adsurf") continue;
+      try {
+        const headers = {
+          "X-Eflow-API-Key": sp.api_key,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        };
+        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub2", {
+          method: "POST", headers,
+          body: JSON.stringify({
+            from: fromDate, to: toDate,
+            timezone_id: 67, currency_id: "USD",
+            filters: {}, pagination: { page: 1, page_size: 50 },
+          }),
+          timeout: 15000,
+        });
+        if (!r.ok) continue;
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("application/json")) continue;
+        const data = await r.json();
+        for (const row of (data.performance || [])) {
+          const subId = parseInt(row.sub2, 10);
+          if (!subId || !SUB_NAMES[subId]) continue;
+          if (!totals[subId]) totals[subId] = { id: subId, name: SUB_NAMES[subId], leads: 0, clicks: 0, revenue: 0 };
+          totals[subId].leads   += row.reporting?.cv          || 0;
+          totals[subId].clicks  += row.reporting?.total_click || 0;
+          totals[subId].revenue += row.reporting?.revenue     || 0;
+        }
+      } catch {}
+    }
+
+    const list = Object.values(totals).sort((a, b) => b.leads - a.leads || b.revenue - a.revenue);
+    res.json({ sub_affiliates: list, dateRange: { from: fromDate, to: toDate } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── HOURLY ───────────────────────────────────────────────────────────────────
 router.get("/hourly", async (req, res) => {
   try {

@@ -263,6 +263,7 @@ function LoginPage({ onLogin }) {
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function DashboardPage() {
   const [data,       setData]       = useState(null);
+  const [subData,    setSubData]    = useState(null);
   const [err,        setErr]        = useState("");
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pulse,      setPulse]      = useState(false);
@@ -305,8 +306,12 @@ function DashboardPage() {
 
   const load = useCallback(async () => {
     try {
-      const d = await api.dashboard(dateFrom, dateTo);
+      const [d, sub] = await Promise.all([
+        api.dashboard(dateFrom, dateTo),
+        api.subAffiliates(dateFrom, dateTo).catch(() => null),
+      ]);
       setData(d);
+      if (sub) setSubData(sub);
       setLastUpdate(new Date());
       setPulse(true);
       setTimeout(() => setPulse(false), 600);
@@ -580,6 +585,53 @@ function DashboardPage() {
                       <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.est_revenue).toFixed(0)}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Sub-Affiliate Leaderboard */}
+      {subData?.sub_affiliates?.length > 0 && (
+        <>
+          <div className="sec-title">Sub-Affiliate Leaderboard</div>
+          <div className="card">
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Sub-Affiliate</th>
+                    <th>ID</th>
+                    <th>Leads</th>
+                    <th>Clicks</th>
+                    <th>Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subData.sub_affiliates.map((s, i) => {
+                    const maxLeads = subData.sub_affiliates[0]?.leads || 1;
+                    const pct = maxLeads > 0 ? (s.leads / maxLeads * 100).toFixed(0) : 0;
+                    const medals = ["🥇","🥈","🥉"];
+                    return (
+                      <tr key={s.id}>
+                        <td style={{fontFamily:"var(--font-mono)",fontSize:14,width:32}}>{medals[i] || i+1}</td>
+                        <td style={{fontWeight:700,fontSize:13}}>{s.name}</td>
+                        <td><span className="offer-id">{s.id}</span></td>
+                        <td>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span className="mono" style={{color:"var(--cyan)",fontWeight:700,minWidth:30}}>{s.leads}</span>
+                            <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden",minWidth:60}}>
+                              <div style={{height:"100%",width:`${pct}%`,background:"var(--cyan)",borderRadius:2,transition:"width .6s ease"}}/>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="mono" style={{color:"var(--text3)"}}>{Number(s.clicks).toLocaleString()}</td>
+                        <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(s.revenue).toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
