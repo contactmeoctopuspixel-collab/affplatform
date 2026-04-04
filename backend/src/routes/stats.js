@@ -237,10 +237,11 @@ router.get("/sub-affiliates/debug", async (req, res) => {
       const headers = { "X-Eflow-API-Key": sp.api_key, "Content-Type": "application/json", "Accept": "application/json" };
       const body = JSON.stringify({ from: fromDate, to: toDate, timezone_id: 67, currency_id: "USD", filters: {}, pagination: { page: 1, page_size: 50 } });
       try {
-        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub3", { method: "POST", headers, body, timeout: 15000 });
+        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/conversions", { method: "POST", headers, body, timeout: 20000 });
         const text = await r.text();
         let json = null; try { json = JSON.parse(text); } catch {}
-        results.push({ sponsor: sp.name, platform: sp.platform, status: r.status, sample: json ? (json.performance || []).slice(0, 3) : text.slice(0, 200), summary: json?.summary });
+        const rows = json ? (json.conversions || json.performance || []) : [];
+        results.push({ sponsor: sp.name, platform: sp.platform, status: r.status, total_rows: rows.length, sample: rows.slice(0, 2), keys: rows[0] ? Object.keys(rows[0]) : [] });
       } catch (e) {
         results.push({ sponsor: sp.name, error: e.message });
       }
@@ -267,35 +268,30 @@ router.get("/sub-affiliates", async (req, res) => {
           "Content-Type": "application/json",
           "Accept": "application/json",
         };
-        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/sub3", {
+        // Use conversions endpoint — includes sub1/sub2/sub3 per conversion
+        const r = await fetch("https://api.eflow.team/v1/affiliates/reporting/conversions", {
           method: "POST", headers,
           body: JSON.stringify({
             from: fromDate, to: toDate,
             timezone_id: 67, currency_id: "USD",
-            filters: {}, pagination: { page: 1, page_size: 100 },
+            filters: {}, pagination: { page: 1, page_size: 500 },
           }),
-          timeout: 15000,
+          timeout: 20000,
         });
-        if (!r.ok) { console.log(`[sub3] ${sp.name} HTTP ${r.status}`); continue; }
+        if (!r.ok) continue;
         const ct = r.headers.get("content-type") || "";
         if (!ct.includes("application/json")) continue;
         const data = await r.json();
-        // Log first row to see the actual field names from Everflow
-        if (data.performance && data.performance.length > 0) {
-          console.log(`[sub3] ${sp.name} sample row keys:`, JSON.stringify(Object.keys(data.performance[0])));
-          console.log(`[sub3] ${sp.name} sample row:`, JSON.stringify(data.performance[0]));
-        } else {
-          console.log(`[sub3] ${sp.name} empty performance. Keys in response:`, JSON.stringify(Object.keys(data)));
-        }
-        for (const row of (data.performance || [])) {
-          // Try all known Everflow sub field names
-          const rawSub = row.sub3 ?? row.sub_id_3 ?? row.sub ?? row["sub 3"] ?? "";
+        for (const row of (data.conversions || data.performance || [])) {
+          // Everflow conversions have sub3 as a direct field
+          const rawSub = row.sub3 ?? row.sub_id_3 ?? row["Sub3"] ?? "";
           const subId = parseInt(String(rawSub), 10);
           if (!subId || !SUB_NAMES[subId]) continue;
           if (!totals[subId]) totals[subId] = { id: subId, name: SUB_NAMES[subId], leads: 0, clicks: 0, revenue: 0 };
-          totals[subId].leads   += row.reporting?.cv          || 0;
-          totals[subId].clicks  += row.reporting?.total_click || 0;
-          totals[subId].revenue += row.reporting?.revenue     || 0;
+          // Each conversion row = 1 lead
+          totals[subId].leads   += 1;
+          totals[subId].revenue += Number(row.revenue || row.payout || 0);
+          totals[subId].clicks  += Number(row.clicks  || 0);
         }
       } catch {}
     }
