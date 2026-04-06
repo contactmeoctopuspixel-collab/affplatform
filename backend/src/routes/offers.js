@@ -77,7 +77,8 @@ router.post("/", requireEditor, async (req, res) => {
 router.patch("/:id", requireEditor, async (req, res) => {
   try {
     const update = {};
-    for (const k of ["name","payout","category","status"]) if (req.body[k] !== undefined) update[k] = req.body[k];
+    for (const k of ["name","payout","category","status","tracking_url","creatives","from_name","subject","notes"])
+      if (req.body[k] !== undefined) update[k] = req.body[k];
     await db.offers.update({ id: req.params.id }, { $set: update });
     res.json({ message: "Updated" });
   } catch (e) { res.status(500).json({ error: e.message }); }

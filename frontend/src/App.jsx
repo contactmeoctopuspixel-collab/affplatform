@@ -931,6 +931,9 @@ function OffersPage({ toast }) {
   const [filterSp, setFilterSp] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [sponsors, setSponsors] = useState([]);
+  const [detailOffer, setDetailOffer] = useState(null);
+  const [detailForm, setDetailForm] = useState({});
+  const [detailSaving, setDetailSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -980,7 +983,7 @@ function OffersPage({ toast }) {
       <div className="card">
         <div className="tbl-wrap">
           <table>
-            <thead><tr><th>ID</th><th>Name</th><th>Sponsor</th><th>Category</th><th>Payout</th><th>Clicks</th><th>Leads</th><th>CR</th><th>Est. Rev</th><th>Status</th><th>Apply</th></tr></thead>
+            <thead><tr><th>ID</th><th>Name</th><th>Sponsor</th><th>Category</th><th>Payout</th><th>Clicks</th><th>Leads</th><th>CR</th><th>Est. Rev</th><th>Status</th><th></th></tr></thead>
             <tbody>
               {filtered.map(o=>(
                 <tr key={o.id}>
@@ -995,11 +998,16 @@ function OffersPage({ toast }) {
                   <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${o.est_revenue}</td>
                   <td><span className={`st-${o.status}`}>● {o.status}</span></td>
                   <td>
-                    <a href={sponsors.find(s=>s.id===o.sponsor_id)?.base_url || "#"} target="_blank" rel="noreferrer"
-                       style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--orange)",textDecoration:"none",
-                               border:"1px solid rgba(255,159,10,.3)",borderRadius:4,padding:"2px 7px",whiteSpace:"nowrap"}}>
-                      ↗ Apply
-                    </a>
+                    <button className="btn btn-sm" style={{fontSize:10,color:"var(--cyan)",borderColor:"rgba(0,207,255,.3)"}}
+                      onClick={()=>{ setDetailOffer(o); setDetailForm({
+                        tracking_url: o.tracking_url||"",
+                        creatives:    o.creatives||"",
+                        from_name:    o.from_name||"",
+                        subject:      o.subject||"",
+                        notes:        o.notes||"",
+                      }); }}>
+                      ≡ Details
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1144,6 +1152,102 @@ function OffersPage({ toast }) {
                 </button>
               </div>
             </>)}
+          </div>
+        </div>
+      )}
+
+      {/* ── Details Modal ─────────────────────────────────────────────────── */}
+      {detailOffer && (
+        <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setDetailOffer(null)}>
+          <div className="modal" style={{width:620,maxHeight:"90vh",overflowY:"auto"}}>
+            <div className="modal-title">
+              <div>
+                <div style={{fontSize:13,fontWeight:900}}>{detailOffer.name}</div>
+                <div style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",fontWeight:400,marginTop:3}}>
+                  ID: {detailOffer.external_id || detailOffer.id} · {detailOffer.sponsor_name} · <span className="payout-v">${detailOffer.payout}</span>
+                </div>
+              </div>
+              <button className="btn btn-sm" onClick={()=>setDetailOffer(null)}>✕</button>
+            </div>
+
+            {/* Tracking URL */}
+            <div className="form-group">
+              <label className="form-label">Tracking URL</label>
+              <div style={{display:"flex",gap:8}}>
+                <input className="form-input" style={{fontFamily:"var(--font-mono)",fontSize:11}}
+                  placeholder="https://tracking.example.com/click?offer=..."
+                  value={detailForm.tracking_url}
+                  onChange={e=>setDetailForm(p=>({...p,tracking_url:e.target.value}))}/>
+                {detailForm.tracking_url && (
+                  <button className="btn btn-sm" style={{flexShrink:0}} onClick={()=>{navigator.clipboard.writeText(detailForm.tracking_url);toast("✓ Copied","ok");}}>⎘</button>
+                )}
+              </div>
+            </div>
+
+            {/* From + Subject */}
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">From (Email Sender)</label>
+                <input className="form-input" placeholder="ex: John Smith"
+                  value={detailForm.from_name}
+                  onChange={e=>setDetailForm(p=>({...p,from_name:e.target.value}))}/>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Subject</label>
+                <input className="form-input" placeholder="ex: Your storage is almost full"
+                  value={detailForm.subject}
+                  onChange={e=>setDetailForm(p=>({...p,subject:e.target.value}))}/>
+              </div>
+            </div>
+
+            {/* Creatives */}
+            <div className="form-group">
+              <label className="form-label">Creatives (URLs — 1 per line)</label>
+              <textarea className="form-input" rows={4}
+                style={{fontFamily:"var(--font-mono)",fontSize:11,resize:"vertical"}}
+                placeholder={"https://cdn.example.com/banner1.jpg\nhttps://cdn.example.com/banner2.jpg"}
+                value={detailForm.creatives}
+                onChange={e=>setDetailForm(p=>({...p,creatives:e.target.value}))}/>
+              {/* Preview creative links */}
+              {detailForm.creatives && (
+                <div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:6}}>
+                  {detailForm.creatives.split("\n").filter(u=>u.trim()).map((u,i)=>(
+                    <a key={i} href={u.trim()} target="_blank" rel="noreferrer"
+                       style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--cyan)",
+                               background:"rgba(0,207,255,.08)",border:"1px solid rgba(0,207,255,.2)",
+                               borderRadius:4,padding:"2px 8px",textDecoration:"none"}}>
+                      ↗ Creative {i+1}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div className="form-group">
+              <label className="form-label">Notes</label>
+              <textarea className="form-input" rows={2} style={{resize:"vertical"}}
+                placeholder="Remarques, restrictions geo, cap journalier..."
+                value={detailForm.notes}
+                onChange={e=>setDetailForm(p=>({...p,notes:e.target.value}))}/>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn" onClick={()=>setDetailOffer(null)}>Cancel</button>
+              <button className="btn btn-primary" disabled={detailSaving}
+                onClick={async()=>{
+                  setDetailSaving(true);
+                  try {
+                    await api.updateOffer(detailOffer.id, detailForm);
+                    toast("✓ Offer details saved","ok");
+                    load();
+                    setDetailOffer(null);
+                  } catch(e){ toast(e.message,"err"); }
+                  finally { setDetailSaving(false); }
+                }}>
+                {detailSaving ? "⟳ Saving…" : "✓ Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}
