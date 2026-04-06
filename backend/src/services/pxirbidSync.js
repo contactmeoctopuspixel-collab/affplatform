@@ -90,7 +90,9 @@ async function login() {
     _token:       formToken,
   }).toString();
 
-  console.log(`[pxirbid] POST /login with user="${USERNAME}", cookie="${cookieHeader().slice(0,80)}"`);
+  const fullCookie = cookieHeader();
+  console.log(`[pxirbid] POST body: ${postBody}`);
+  console.log(`[pxirbid] POST /login with user="${USERNAME}", pass_len=${PASSWORD.length}, cookie="${fullCookie}"`);
 
   // POST with redirect:manual to detect success (302 to non-login = success)
   const res = await fetch(`${BASE_URL}/login`, {
