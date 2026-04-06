@@ -37,19 +37,25 @@ function parseCookies(res) {
 async function login() {
   const agent = getAgent();
 
-  // Step 1: GET login page — grab initial XSRF token
+  // Step 1: GET login page — grab _token from HTML form + cookies
   const page = await fetch(`${BASE_URL}/login`, {
     method: "GET",
     headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/html" },
     agent, redirect: "follow",
   });
   parseCookies(page);
+  const pageHtml = await page.text();
 
-  // Step 2: POST login — try email field (Laravel default)
+  // Extract _token from form HTML (Laravel CSRF token)
+  const tokenMatch = pageHtml.match(/name=["']_token["'][^>]+value=["']([^"']+)["']/) ||
+                     pageHtml.match(/value=["']([^"']+)["'][^>]+name=["']_token["']/);
+  const formToken = tokenMatch?.[1] || _xsrf;
+
+  // Step 2: POST login
   const body = new URLSearchParams({
     username: USERNAME,
     password: PASSWORD,
-    _token:   _xsrf,
+    _token:   formToken,
   }).toString();
 
   const res = await fetch(`${BASE_URL}/login`, {
