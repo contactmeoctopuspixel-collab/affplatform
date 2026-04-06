@@ -47,7 +47,7 @@ async function login() {
 
   // Step 2: POST login — try email field (Laravel default)
   const body = new URLSearchParams({
-    email:    USERNAME,
+    username: USERNAME,
     password: PASSWORD,
     _token:   _xsrf,
   }).toString();
