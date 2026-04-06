@@ -65,18 +65,29 @@ async function login() {
   const formToken = tokenMatch?.[1] || _xsrf;
   console.log(`[pxirbid] _token extracted: ${formToken ? formToken.slice(0,20)+"..." : "NONE"} (from ${tokenMatch ? "form" : "xsrf cookie"})`);
 
+  // Dump form HTML to see field names
+  const formMatch = pageHtml.match(/<form[^>]*>([\s\S]*?)<\/form>/i);
+  if (formMatch) {
+    const formSnip = formMatch[1].replace(/\s+/g, " ").slice(0, 1000);
+    console.log(`[pxirbid] Form HTML: ${formSnip}`);
+  } else {
+    console.log(`[pxirbid] No <form> found! Page: ${pageHtml.slice(0,500).replace(/\s+/g," ")}`);
+  }
+
   if (!formToken) {
-    // Dump a snippet of the HTML to help debug
-    const snip = pageHtml.slice(0, 2000).replace(/\s+/g, " ");
-    console.log(`[pxirbid] HTML snippet: ${snip}`);
     throw new Error("Could not extract _token from login page");
   }
 
+  // Detect field name: username or email
+  const usesEmail = /name=["']email["']/i.test(pageHtml);
+  const loginField = usesEmail ? "email" : "username";
+  console.log(`[pxirbid] Login field name: "${loginField}"`);
+
   // Step 2: POST login
   const postBody = new URLSearchParams({
-    username: USERNAME,
-    password: PASSWORD,
-    _token:   formToken,
+    [loginField]: USERNAME,
+    password:     PASSWORD,
+    _token:       formToken,
   }).toString();
 
   console.log(`[pxirbid] POST /login with user="${USERNAME}", cookie="${cookieHeader().slice(0,80)}"`);
