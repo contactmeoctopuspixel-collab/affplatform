@@ -39,8 +39,11 @@ router.post("/sync-offers", requireEditor, async (req, res) => {
       wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
     }
     console.log(`✓ sync-offers done: ${result.totalImported} new, ${result.totalUpdated} updated`);
-    // Fetch tracking URLs + creatives in background
+    // Fetch tracking URLs in background
     syncOfferDetails().catch(e => console.error("syncOfferDetails:", e.message));
+    // Fetch from/subject/creatives from pxirbidlink in background
+    const { syncAssetsFromPxirbid } = require("../services/pxirbidSync");
+    syncAssetsFromPxirbid().catch(e => console.error("pxirbidSync:", e.message));
   } catch (e) { console.error("sync-offers background error:", e.message); }
 });
 
