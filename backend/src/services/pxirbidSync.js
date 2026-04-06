@@ -40,76 +40,90 @@ async function login() {
   // Step 1: GET login page — grab _token from HTML form + cookies
   const page = await fetch(`${BASE_URL}/login`, {
     method: "GET",
-    headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/html" },
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+    },
     agent, redirect: "follow",
   });
   parseCookies(page);
   const pageHtml = await page.text();
 
-  // Extract _token from form HTML (Laravel CSRF token)
-  const tokenMatch = pageHtml.match(/name=["']_token["'][^>]+value=["']([^"']+)["']/) ||
-                     pageHtml.match(/value=["']([^"']+)["'][^>]+name=["']_token["']/);
+  console.log(`[pxirbid] GET /login → HTTP ${page.status}, html length=${pageHtml.length}`);
+  console.log(`[pxirbid] Cookies after GET: ${JSON.stringify(Object.keys(_cookies))}`);
+
+  // Extract _token from form HTML (Laravel CSRF token) — try multiple patterns
+  const tokenMatch =
+    pageHtml.match(/name=["']_token["'][^>]*value=["']([^"']+)["']/) ||
+    pageHtml.match(/value=["']([^"']+)["'][^>]*name=["']_token["']/) ||
+    pageHtml.match(/<input[^>]+_token[^>]+value=["']([^"']+)["']/) ||
+    pageHtml.match(/csrf[_-]?token["']?\s*:\s*["']([^"']+)["']/i) ||
+    pageHtml.match(/meta[^>]+csrf-token[^>]+content=["']([^"']+)["']/i) ||
+    pageHtml.match(/content=["']([^"']+)["'][^>]*name=["']csrf-token["']/i);
+
   const formToken = tokenMatch?.[1] || _xsrf;
+  console.log(`[pxirbid] _token extracted: ${formToken ? formToken.slice(0,20)+"..." : "NONE"} (from ${tokenMatch ? "form" : "xsrf cookie"})`);
+
+  if (!formToken) {
+    // Dump a snippet of the HTML to help debug
+    const snip = pageHtml.slice(0, 2000).replace(/\s+/g, " ");
+    console.log(`[pxirbid] HTML snippet: ${snip}`);
+    throw new Error("Could not extract _token from login page");
+  }
 
   // Step 2: POST login
-  const body = new URLSearchParams({
+  const postBody = new URLSearchParams({
     username: USERNAME,
     password: PASSWORD,
     _token:   formToken,
   }).toString();
 
+  console.log(`[pxirbid] POST /login with user="${USERNAME}", cookie="${cookieHeader().slice(0,80)}"`);
+
+  // POST with redirect:manual to detect success (302 to non-login = success)
   const res = await fetch(`${BASE_URL}/login`, {
     method: "POST",
     headers: {
-      "User-Agent":   "Mozilla/5.0",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "X-XSRF-TOKEN": _xsrf,
-      "Cookie":       cookieHeader(),
-      "Referer":      `${BASE_URL}/login`,
-      "Accept":       "text/html,application/xhtml+xml,*/*",
-      "Origin":       BASE_URL,
+      "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Content-Type":    "application/x-www-form-urlencoded",
+      "Cookie":          cookieHeader(),
+      "Referer":         `${BASE_URL}/login`,
+      "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+      "Origin":          BASE_URL,
+      "X-XSRF-TOKEN":    _xsrf,
     },
-    body, agent, redirect: "follow",
+    body: postBody, agent, redirect: "manual",
   });
   parseCookies(res);
 
-  const resText = await res.text();
-  // Check if redirected to dashboard (login success) or still on login page
-  const isLoggedIn = _cookies["pxirbidlink_session"] &&
-    (res.url?.includes("/dashboard") || res.url?.includes("/admin") ||
-     !resText.includes('<title>LOGIN</title>'));
+  const location = res.headers.get("location") || "";
+  console.log(`[pxirbid] POST /login → HTTP ${res.status}, location="${location}"`);
 
-  if (!isLoggedIn) {
-    // Extract _token from HTML if XSRF didn't work
-    const tokenMatch = resText.match(/name="_token"\s+value="([^"]+)"/);
-    if (tokenMatch) {
-      // Try again with HTML token
-      const body2 = new URLSearchParams({
-        email: USERNAME, password: PASSWORD, _token: tokenMatch[1],
-      }).toString();
-      const res2 = await fetch(`${BASE_URL}/login`, {
-        method: "POST",
-        headers: {
-          "User-Agent":   "Mozilla/5.0",
-          "Content-Type": "application/x-www-form-urlencoded",
-          "X-XSRF-TOKEN": tokenMatch[1],
-          "Cookie":       cookieHeader(),
-          "Referer":      `${BASE_URL}/login`,
-          "Accept":       "text/html,application/xhtml+xml,*/*",
-          "Origin":       BASE_URL,
-        },
-        body: body2, agent, redirect: "follow",
-      });
-      parseCookies(res2);
-      const t2 = await res2.text();
-      if (t2.includes('<title>LOGIN</title>')) {
-        throw new Error(`Login failed — check credentials. Response: ${t2.slice(0,200)}`);
-      }
-    } else {
-      throw new Error(`Login failed HTTP ${res.status}: ${resText.slice(0, 200)}`);
-    }
+  // Success: 302 to anything that's NOT /login
+  if (res.status === 302 && !location.includes("/login")) {
+    // Follow the redirect to establish full session
+    const redirectUrl = location.startsWith("http") ? location : `${BASE_URL}${location}`;
+    await fetch(redirectUrl, {
+      method: "GET", agent,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Cookie": cookieHeader(),
+      },
+      redirect: "follow",
+    }).then(r => { parseCookies(r); console.log(`[pxirbid] Followed redirect → HTTP ${r.status}`); }).catch(() => {});
+    console.log("[pxirbid] Login OK → " + location);
+    return;
   }
-  console.log("[pxirbid] Login OK");
+
+  // Login failed — try to get error message from response body
+  let errBody = "";
+  try { errBody = await res.text(); } catch {}
+  const errSnip = errBody.slice(0, 500).replace(/\s+/g, " ");
+  console.log(`[pxirbid] Login failed body snippet: ${errSnip}`);
+
+  throw new Error(`Login failed — HTTP ${res.status}, location: ${location || "none"}`);
 }
 
 async function fetchAssets(offerId, type) {
