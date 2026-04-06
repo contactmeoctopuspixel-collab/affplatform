@@ -45,8 +45,13 @@ async function login() {
   });
   parseCookies(page);
 
-  // Step 2: POST login
-  const body = new URLSearchParams({ username: USERNAME, password: PASSWORD }).toString();
+  // Step 2: POST login — try email field (Laravel default)
+  const body = new URLSearchParams({
+    email:    USERNAME,
+    password: PASSWORD,
+    _token:   _xsrf,
+  }).toString();
+
   const res = await fetch(`${BASE_URL}/login`, {
     method: "POST",
     headers: {
@@ -55,15 +60,48 @@ async function login() {
       "X-XSRF-TOKEN": _xsrf,
       "Cookie":       cookieHeader(),
       "Referer":      `${BASE_URL}/login`,
-      "Accept":       "application/json, text/html, */*",
+      "Accept":       "text/html,application/xhtml+xml,*/*",
+      "Origin":       BASE_URL,
     },
     body, agent, redirect: "follow",
   });
   parseCookies(res);
 
-  if (!_cookies["pxirbidlink_session"]) {
-    const text = await res.text();
-    throw new Error(`Login failed HTTP ${res.status}: ${text.slice(0, 200)}`);
+  const resText = await res.text();
+  // Check if redirected to dashboard (login success) or still on login page
+  const isLoggedIn = _cookies["pxirbidlink_session"] &&
+    (res.url?.includes("/dashboard") || res.url?.includes("/admin") ||
+     !resText.includes('<title>LOGIN</title>'));
+
+  if (!isLoggedIn) {
+    // Extract _token from HTML if XSRF didn't work
+    const tokenMatch = resText.match(/name="_token"\s+value="([^"]+)"/);
+    if (tokenMatch) {
+      // Try again with HTML token
+      const body2 = new URLSearchParams({
+        email: USERNAME, password: PASSWORD, _token: tokenMatch[1],
+      }).toString();
+      const res2 = await fetch(`${BASE_URL}/login`, {
+        method: "POST",
+        headers: {
+          "User-Agent":   "Mozilla/5.0",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-XSRF-TOKEN": tokenMatch[1],
+          "Cookie":       cookieHeader(),
+          "Referer":      `${BASE_URL}/login`,
+          "Accept":       "text/html,application/xhtml+xml,*/*",
+          "Origin":       BASE_URL,
+        },
+        body: body2, agent, redirect: "follow",
+      });
+      parseCookies(res2);
+      const t2 = await res2.text();
+      if (t2.includes('<title>LOGIN</title>')) {
+        throw new Error(`Login failed — check credentials. Response: ${t2.slice(0,200)}`);
+      }
+    } else {
+      throw new Error(`Login failed HTTP ${res.status}: ${resText.slice(0, 200)}`);
+    }
   }
   console.log("[pxirbid] Login OK");
 }
