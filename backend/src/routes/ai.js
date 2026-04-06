@@ -25,18 +25,23 @@ router.get("/scaling", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/ai/sync-offers — import all offers from all sponsors
+// POST /api/ai/sync-offers — import all offers from all sponsors (runs in background)
 router.post("/sync-offers", requireEditor, async (req, res) => {
+  // Return immediately — sync runs in background to avoid nginx timeout
+  res.json({ ok: true, message: "Sync started in background — check logs" });
+
+  const { syncOfferDetails } = require("../services/offersSync");
+  const wss = req.app.get("wss");
   try {
     const result = await syncAllOffers();
-    // Broadcast to WS clients
-    const wss = req.app.get("wss");
     if (wss) {
       const msg = JSON.stringify({ type: "offers_synced", ...result });
       wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
     }
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    console.log(`✓ sync-offers done: ${result.totalImported} new, ${result.totalUpdated} updated`);
+    // Fetch tracking URLs + creatives in background
+    syncOfferDetails().catch(e => console.error("syncOfferDetails:", e.message));
+  } catch (e) { console.error("sync-offers background error:", e.message); }
 });
 
 // POST /api/ai/cleanup-offers — remove offers not seen in latest import
