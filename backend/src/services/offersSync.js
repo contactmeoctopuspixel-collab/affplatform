@@ -287,36 +287,26 @@ async function syncAllOffers() {
   return { totalImported, totalUpdated, results };
 }
 
-// Background worker — fetch details for all offers marked _needsDetails:true
-// Called after syncAllOffers returns (non-blocking for the HTTP response)
+// Background worker — fetch tracking URLs for offers missing them
+// Note: Everflow affiliate API does NOT expose creatives/from/subject (404)
+// Only tracking_url is available via /v1/affiliates/offers/:id
 async function syncOfferDetails() {
-  const pending = await db.offers.find({ _needsDetails: true });
+  const pending = await db.offers.find({ _needsDetails: true, tracking_url: { $exists: false } });
   if (pending.length === 0) return;
-  console.log(`📎 Fetching details for ${pending.length} offers in background...`);
+  console.log(`📎 Fetching tracking URLs for ${pending.length} offers...`);
 
   for (const offer of pending) {
     const apiKey = offer._detailsApiKey;
     if (!apiKey || !offer.external_id) continue;
     try {
-      const [detail, creativesBody] = await Promise.all([
-        fetchOfferDetails(apiKey, offer.external_id),
-        fetchOfferCreatives(apiKey, offer.external_id),
-      ]);
+      const detail = await fetchOfferDetails(apiKey, offer.external_id);
       const trackingUrl = extractTrackingUrl(detail);
-      const emailData   = extractEmailCreatives(creativesBody);
-
       const upd = { _needsDetails: false };
-      if (trackingUrl)         upd.tracking_url = trackingUrl;
-      if (emailData.from_name) upd.from_name    = emailData.from_name;
-      if (emailData.subject)   upd.subject      = emailData.subject;
-      if (emailData.creatives) upd.creatives    = emailData.creatives;
-
+      if (trackingUrl) { upd.tracking_url = trackingUrl; console.log(`  📎 ${offer.external_id}: ${trackingUrl}`); }
       await db.offers.update({ _id: offer._id }, { $set: upd });
-      if (trackingUrl) console.log(`  📎 ${offer.name}: details fetched`);
-    } catch { /* skip — will retry next sync */ }
+    } catch { /* skip */ }
     await new Promise(r => setTimeout(r, 200));
   }
-  console.log("📎 Background detail sync complete");
 }
 
 module.exports = { syncAllOffers, fetchEverflowOffers, syncOfferDetails, fetchOfferDetails, fetchOfferCreatives, extractTrackingUrl, extractEmailCreatives };
