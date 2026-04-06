@@ -24,6 +24,94 @@ function httpsPost(hostname, path, headers, body) {
   });
 }
 
+// Native HTTPS GET
+function httpsGet(hostname, path, headers) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      { hostname, path, method: "GET", headers: { ...headers, "Connection": "close" } },
+      res => {
+        let data = "";
+        res.on("data", c => (data += c));
+        res.on("end", () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+          catch { resolve({ status: res.statusCode, body: data }); }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.setTimeout(20000, () => { req.destroy(); reject(new Error("GET timeout")); });
+    req.end();
+  });
+}
+
+// Fetch offer details (tracking URL, preview URL) from Everflow affiliate API
+async function fetchOfferDetails(apiKey, externalId) {
+  const headers = {
+    "X-Eflow-API-Key": apiKey,
+    "Content-Type":    "application/json",
+    "Accept":          "application/json",
+  };
+  try {
+    const { status, body } = await httpsGet("api.eflow.team", `/v1/affiliates/offers/${externalId}`, headers);
+    if (status !== 200 || !body || typeof body !== "object") return null;
+    return body;
+  } catch { return null; }
+}
+
+// Fetch creatives for an offer (banners + email with from/subject)
+async function fetchOfferCreatives(apiKey, externalId) {
+  const headers = {
+    "X-Eflow-API-Key": apiKey,
+    "Content-Type":    "application/json",
+    "Accept":          "application/json",
+  };
+  try {
+    const { status, body } = await httpsGet("api.eflow.team", `/v1/affiliates/offers/${externalId}/creatives`, headers);
+    if (status !== 200 || !body || typeof body !== "object") return null;
+    return body;
+  } catch { return null; }
+}
+
+// Extract tracking URL from offer detail response
+function extractTrackingUrl(detail) {
+  if (!detail) return "";
+  return detail.tracking_url
+    || detail.preview_url
+    || detail.offer_url
+    || detail.landing_page_url
+    || detail.url
+    || "";
+}
+
+// Extract from_name + subject from creatives response (email creatives)
+function extractEmailCreatives(creativesBody) {
+  const result = { from_name: "", subject: "", creatives: "" };
+  if (!creativesBody) return result;
+
+  // creatives array may be at root or nested
+  const arr = Array.isArray(creativesBody)
+    ? creativesBody
+    : (creativesBody.creatives || creativesBody.data || creativesBody.results || []);
+
+  const urls = [];
+  for (const cr of arr) {
+    // Email creative
+    if (cr.type === "email" || cr.creative_type === "email" || cr.from || cr.subject_lines) {
+      if (!result.from_name && (cr.from || cr.from_name)) result.from_name = cr.from || cr.from_name;
+      if (!result.subject) {
+        const subj = cr.subject || (cr.subject_lines && cr.subject_lines[0]);
+        if (subj) result.subject = typeof subj === "object" ? subj.subject || subj.text || "" : subj;
+      }
+    }
+    // Banner / image creative URLs
+    const url = cr.url || cr.thumbnail_url || cr.preview_url || cr.image_url || cr.creative_url;
+    if (url && !urls.includes(url)) urls.push(url);
+  }
+
+  result.creatives = urls.join("\n");
+  return result;
+}
+
 function guessCategory(name) {
   const n = (name || "").toLowerCase();
   if (n.includes("cloud") || n.includes("storage") || n.includes("drive")) return "Cloud Storage";
@@ -162,6 +250,8 @@ async function syncAllOffers() {
         if (o.leads   > 0) updates.leads   = o.leads;
         if (o.revenue > 0) updates.revenue = o.revenue;
         if (o.payout  > 0 && !existing.payout) updates.payout = o.payout;
+        // Backfill missing details fields
+        if (!existing.tracking_url) updates._needsDetails = true;
         await db.offers.update({ _id: offerId }, { $set: updates });
         updated++;
         totalUpdated++;
@@ -181,6 +271,33 @@ async function syncAllOffers() {
         });
         imported++;
         totalImported++;
+      }
+
+      // ── Fetch details + creatives (only for new offers or those missing tracking_url) ──
+      const currentOffer = await db.offers.findOne({ _id: offerId });
+      if ((sp.platform === "everflow" || sp.platform === "bizaglo" || sp.platform === "sphinxads")
+          && currentOffer && !currentOffer.tracking_url) {
+        try {
+          const [detail, creativesBody] = await Promise.all([
+            fetchOfferDetails(sp.api_key, o.external_id),
+            fetchOfferCreatives(sp.api_key, o.external_id),
+          ]);
+          const trackingUrl = extractTrackingUrl(detail);
+          const emailData   = extractEmailCreatives(creativesBody);
+
+          const detailUpdate = {};
+          if (trackingUrl)          detailUpdate.tracking_url = trackingUrl;
+          if (emailData.from_name)  detailUpdate.from_name    = emailData.from_name;
+          if (emailData.subject)    detailUpdate.subject      = emailData.subject;
+          if (emailData.creatives)  detailUpdate.creatives    = emailData.creatives;
+          detailUpdate._needsDetails = false;
+
+          if (Object.keys(detailUpdate).length > 1) { // >1 because _needsDetails always set
+            await db.offers.update({ _id: offerId }, { $set: detailUpdate });
+            console.log(`  📎 ${o.name}: tracking URL + creatives fetched`);
+          }
+        } catch { /* non-blocking */ }
+        await new Promise(r => setTimeout(r, 150));
       }
     }
 
