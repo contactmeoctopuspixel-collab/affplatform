@@ -319,4 +319,4 @@ async function syncOfferDetails() {
   console.log("📎 Background detail sync complete");
 }
 
-module.exports = { syncAllOffers, fetchEverflowOffers, syncOfferDetails };
+module.exports = { syncAllOffers, fetchEverflowOffers, syncOfferDetails, fetchOfferDetails, fetchOfferCreatives, extractTrackingUrl, extractEmailCreatives };

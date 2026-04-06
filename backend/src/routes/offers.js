@@ -86,6 +86,42 @@ router.patch("/:id", requireEditor, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/offers/:id/fetch-details — fetch + log raw Everflow response for one offer
+router.post("/:id/fetch-details", requireEditor, async (req, res) => {
+  try {
+    const offer = await db.offers.findOne({ id: req.params.id });
+    if (!offer) return res.status(404).json({ error: "Offer not found" });
+
+    const sponsor = await db.sponsors.findOne({ id: offer.sponsor_id });
+    if (!sponsor?.api_key) return res.status(400).json({ error: "No API key for sponsor" });
+
+    const { fetchOfferDetails, fetchOfferCreatives, extractTrackingUrl, extractEmailCreatives } = require("../services/offersSync");
+
+    const [detail, creativesBody] = await Promise.all([
+      fetchOfferDetails(sponsor.api_key, offer.external_id),
+      fetchOfferCreatives(sponsor.api_key, offer.external_id),
+    ]);
+
+    console.log(`[fetchDetails] offer ${offer.external_id} detail:`, JSON.stringify(detail)?.slice(0, 500));
+    console.log(`[fetchDetails] offer ${offer.external_id} creatives:`, JSON.stringify(creativesBody)?.slice(0, 500));
+
+    const trackingUrl = extractTrackingUrl(detail);
+    const emailData   = extractEmailCreatives(creativesBody);
+
+    const upd = {};
+    if (trackingUrl)         upd.tracking_url = trackingUrl;
+    if (emailData.from_name) upd.from_name    = emailData.from_name;
+    if (emailData.subject)   upd.subject      = emailData.subject;
+    if (emailData.creatives) upd.creatives    = emailData.creatives;
+
+    if (Object.keys(upd).length > 0) {
+      await db.offers.update({ id: req.params.id }, { $set: upd });
+    }
+
+    res.json({ raw_detail: detail, raw_creatives: creativesBody, extracted: { trackingUrl, ...emailData }, saved: upd });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // DELETE /api/offers/clear-demo — delete all demo/seed offers (not imported from sponsors)
 router.delete("/clear-demo", requireEditor, async (req, res) => {
   try {
