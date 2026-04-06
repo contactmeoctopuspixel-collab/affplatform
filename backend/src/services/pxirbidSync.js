@@ -3,6 +3,9 @@ const fetch  = require("node-fetch");
 const db     = require("../db");
 const { HttpsProxyAgent } = require("https-proxy-agent");
 
+// Disable SSL verification for internal app with mismatched cert
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const BASE_URL  = process.env.PXIRBIDLINK_URL  || "https://app.pxirbidlink.com";
 const USERNAME  = process.env.PXIRBIDLINK_USER || "";
 const PASSWORD  = process.env.PXIRBIDLINK_PASS || "";
@@ -10,7 +13,7 @@ const PROXY_RAW = process.env.PXIRBIDLINK_PROXY || "";
 
 function getAgent() {
   if (!PROXY_RAW) return undefined;
-  return new HttpsProxyAgent(PROXY_RAW);
+  return new HttpsProxyAgent(PROXY_RAW, { rejectUnauthorized: false });
 }
 
 let _cookies = {}; // { name: value }
