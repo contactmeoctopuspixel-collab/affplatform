@@ -2,7 +2,7 @@
 const express = require("express");
 const db = require("../db");
 const { authMiddleware, requireEditor } = require("../middleware/auth");
-const { syncAllOffers } = require("../services/offersSync");
+const { syncAllOffers, syncOfferDetails } = require("../services/offersSync");
 const router = express.Router();
 router.use(authMiddleware);
 
@@ -16,6 +16,8 @@ router.post("/sync", requireEditor, async (req, res) => {
       wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
     }
     res.json({ success: true, ...result });
+    // Fetch tracking URLs + creatives in background (non-blocking)
+    syncOfferDetails().catch(e => console.error("syncOfferDetails error:", e.message));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -273,31 +273,10 @@ async function syncAllOffers() {
         totalImported++;
       }
 
-      // ── Fetch details + creatives (only for new offers or those missing tracking_url) ──
+      // Mark offers needing details fetch (done in background after sync returns)
       const currentOffer = await db.offers.findOne({ _id: offerId });
-      if ((sp.platform === "everflow" || sp.platform === "bizaglo" || sp.platform === "sphinxads")
-          && currentOffer && !currentOffer.tracking_url) {
-        try {
-          const [detail, creativesBody] = await Promise.all([
-            fetchOfferDetails(sp.api_key, o.external_id),
-            fetchOfferCreatives(sp.api_key, o.external_id),
-          ]);
-          const trackingUrl = extractTrackingUrl(detail);
-          const emailData   = extractEmailCreatives(creativesBody);
-
-          const detailUpdate = {};
-          if (trackingUrl)          detailUpdate.tracking_url = trackingUrl;
-          if (emailData.from_name)  detailUpdate.from_name    = emailData.from_name;
-          if (emailData.subject)    detailUpdate.subject      = emailData.subject;
-          if (emailData.creatives)  detailUpdate.creatives    = emailData.creatives;
-          detailUpdate._needsDetails = false;
-
-          if (Object.keys(detailUpdate).length > 1) { // >1 because _needsDetails always set
-            await db.offers.update({ _id: offerId }, { $set: detailUpdate });
-            console.log(`  📎 ${o.name}: tracking URL + creatives fetched`);
-          }
-        } catch { /* non-blocking */ }
-        await new Promise(r => setTimeout(r, 150));
+      if (currentOffer && !currentOffer.tracking_url) {
+        await db.offers.update({ _id: offerId }, { $set: { _needsDetails: true, _detailsApiKey: sp.api_key } });
       }
     }
 
@@ -308,4 +287,36 @@ async function syncAllOffers() {
   return { totalImported, totalUpdated, results };
 }
 
-module.exports = { syncAllOffers, fetchEverflowOffers };
+// Background worker — fetch details for all offers marked _needsDetails:true
+// Called after syncAllOffers returns (non-blocking for the HTTP response)
+async function syncOfferDetails() {
+  const pending = await db.offers.find({ _needsDetails: true });
+  if (pending.length === 0) return;
+  console.log(`📎 Fetching details for ${pending.length} offers in background...`);
+
+  for (const offer of pending) {
+    const apiKey = offer._detailsApiKey;
+    if (!apiKey || !offer.external_id) continue;
+    try {
+      const [detail, creativesBody] = await Promise.all([
+        fetchOfferDetails(apiKey, offer.external_id),
+        fetchOfferCreatives(apiKey, offer.external_id),
+      ]);
+      const trackingUrl = extractTrackingUrl(detail);
+      const emailData   = extractEmailCreatives(creativesBody);
+
+      const upd = { _needsDetails: false };
+      if (trackingUrl)         upd.tracking_url = trackingUrl;
+      if (emailData.from_name) upd.from_name    = emailData.from_name;
+      if (emailData.subject)   upd.subject      = emailData.subject;
+      if (emailData.creatives) upd.creatives    = emailData.creatives;
+
+      await db.offers.update({ _id: offer._id }, { $set: upd });
+      if (trackingUrl) console.log(`  📎 ${offer.name}: details fetched`);
+    } catch { /* skip — will retry next sync */ }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  console.log("📎 Background detail sync complete");
+}
+
+module.exports = { syncAllOffers, fetchEverflowOffers, syncOfferDetails };
