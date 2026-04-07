@@ -119,9 +119,10 @@ async function detectAndFetch(apiKey, from, to) {
   return null;
 }
 
-// Save conversions to DB, skip duplicates
+// Save conversions to DB, skip duplicates — returns { saved, newItems }
 async function saveConversions(rows, sponsorName) {
   let saved = 0;
+  const newItems = [];
   for (const row of rows) {
     const sub3 = getSub3(row);
     const subId = parseInt(sub3, 10);
@@ -158,17 +159,20 @@ async function saveConversions(rows, sponsorName) {
       created_at: createdAt,
     });
     saved++;
+    newItems.push({ mailerName: SUB_NAMES[subId], mailerId: subId, revenue, txId });
   }
-  return saved;
+  return { saved, newItems };
 }
 
 // Main sync — called on startup + every N minutes
+// Returns { totalSaved, allNewItems }
 async function syncConversions(daysBack = 30) {
   const today    = new Date().toISOString().slice(0, 10);
   const fromDate = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10);
 
   const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: "" } });
   let totalSaved = 0;
+  const allNewItems = [];
 
   for (const sp of sponsors) {
     if (!sp.api_key || sp.platform === "adsurf") continue;
@@ -178,15 +182,16 @@ async function syncConversions(daysBack = 30) {
         console.log(`[convSync] ${sp.name}: no working endpoint found`);
         continue;
       }
-      const saved = await saveConversions(result.rows, sp.name);
+      const { saved, newItems } = await saveConversions(result.rows, sp.name);
       totalSaved += saved;
+      allNewItems.push(...newItems);
       if (saved > 0) console.log(`[convSync] ${sp.name}: +${saved} new conversions saved`);
     } catch (e) {
       console.error(`[convSync] ${sp.name} error:`, e.message);
     }
   }
 
-  return totalSaved;
+  return { totalSaved, allNewItems };
 }
 
 module.exports = { syncConversions, SUB_NAMES };

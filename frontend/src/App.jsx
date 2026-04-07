@@ -1876,10 +1876,17 @@ export default function App() {
 
       // New lead detected!
       if (msg.type === "new_lead") {
+        const isMailer = !!msg.mailerName; // from conversion sync
+        const title = isMailer
+          ? `💰 New Lead — ${msg.mailerName}`
+          : `💰 New Lead — ${msg.sponsorName || ""}`;
+        const body = isMailer
+          ? `ID: ${msg.mailerId} · +$${Number(msg.revenue || 0).toFixed(2)}`
+          : `${msg.count || 1} lead${(msg.count||1) > 1 ? "s" : ""} · +$${Number(msg.revenue||0).toFixed(2)}`;
         const notif = {
           id: Date.now(),
-          title: `💰 New Lead — ${msg.sponsorName}`,
-          body: `${msg.count} lead${msg.count > 1 ? "s" : ""} · +$${Number(msg.revenue).toFixed(2)}`,
+          title,
+          body,
           color: msg.sponsorColor || "#00ff9d",
           time: new Date().toLocaleTimeString(),
           sponsorId: msg.sponsorId,

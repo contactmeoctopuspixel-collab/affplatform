@@ -75,12 +75,24 @@ async function syncAllSponsors() {
 // Sync conversions (sub3 data) from Everflow and broadcast result
 async function runConversionSync() {
   try {
-    const saved = await syncConversions(30);
+    const { totalSaved, allNewItems } = await syncConversions(30);
     lastConvSync  = new Date().toISOString();
-    lastConvCount = saved;
-    if (saved > 0) {
-      broadcast({ type: "conversions_synced", saved, timestamp: lastConvSync });
-      console.log(`[convSync] Broadcast: ${saved} new conversions`);
+    lastConvCount = totalSaved;
+    if (totalSaved > 0) {
+      broadcast({ type: "conversions_synced", saved: totalSaved, timestamp: lastConvSync });
+      console.log(`[convSync] Broadcast: ${totalSaved} new conversions`);
+
+      // Broadcast one notification per new conversion with mailer details
+      for (const item of allNewItems) {
+        broadcast({
+          type: "new_lead",
+          mailerName:  item.mailerName,
+          mailerId:    item.mailerId,
+          revenue:     item.revenue,
+          txId:        item.txId,
+          timestamp:   lastConvSync,
+        });
+      }
     }
   } catch (e) {
     console.error("[convSync] runConversionSync error:", e.message);
