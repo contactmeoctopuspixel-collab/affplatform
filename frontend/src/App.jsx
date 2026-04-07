@@ -1622,6 +1622,13 @@ alert("✓ "+result.imported+" new + "+result.updated+" updated ("+offers.length
                     <div className="avatar" style={{width:24,height:24,fontSize:10}}>{u.name[0]}</div>
                     <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{u.name}</div><div style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>{u.email}</div></div>
                     <span className="badge" style={{background:"var(--bg3)"}}>{u.role}</span>
+                    {u.id !== user.id && (
+                      <button className="btn btn-danger btn-sm" style={{padding:"2px 8px",fontSize:10}} onClick={async()=>{
+                        if(!confirm(`Delete ${u.email}?`)) return;
+                        try { await api.deleteUser(u.id); toast("User deleted","ok"); setUsers(p=>p.filter(x=>x.id!==u.id)); }
+                        catch(e) { toast(e.message,"err"); }
+                      }}>✕</button>
+                    )}
                   </div>
                 ))}
               </div>
