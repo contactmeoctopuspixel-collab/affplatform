@@ -295,7 +295,7 @@ function Toast({ msg, type, onClose }) {
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
 function LoginPage({ onLogin }) {
-  const [email, setEmail] = useState("admin@affplatform.com");
+  const [email, setEmail] = useState("");
   const [pass,  setPass]  = useState("");
   const [err,   setErr]   = useState("");
   const [busy,  setBusy]  = useState(false);
@@ -331,10 +331,6 @@ function LoginPage({ onLogin }) {
         <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",marginTop:4}} onClick={submit} disabled={busy}>
           {busy ? "Authenticating…" : "Sign In →"}
         </button>
-        <div className="login-hint">
-          <strong>admin:</strong> admin@affplatform.com / admin123<br/>
-          <strong>team:</strong>  team@affplatform.com / team123
-        </div>
       </div>
     </div>
   );
