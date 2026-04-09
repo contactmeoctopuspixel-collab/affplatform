@@ -16,7 +16,7 @@ const PORT   = process.env.PORT || 4000;
 const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MINUTES) || 2;
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({ server, path: "/api/ws" });
 app.set("wss", wss);
 
 wss.on("connection", (ws) => {

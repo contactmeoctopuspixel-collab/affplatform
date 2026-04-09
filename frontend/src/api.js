@@ -73,7 +73,7 @@ export const api = {
 // WebSocket client
 export function createWS(onMessage) {
   const proto = window.location.protocol === "https:" ? "wss://" : "ws://";
-  const WS_URL = (import.meta?.env?.VITE_WS_URL || (proto + window.location.host)) + "/ws";
+  const WS_URL = (import.meta?.env?.VITE_WS_URL || (proto + window.location.host + "/api")) + "/ws";
   let ws, retryTimeout;
 
   function connect() {
