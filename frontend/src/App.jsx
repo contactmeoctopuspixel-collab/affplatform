@@ -2326,11 +2326,9 @@ export default function App() {
         }
       }
 
-      // 5. Offers synced
       if (msg.type === "offers_synced") {
         showToast(`📋 ${msg.totalImported} new offers imported`, "ok");
       }
-    });
     });
     return () => { wsRef.current?.close(); setWsConnected(false); };
   }, [user]);
