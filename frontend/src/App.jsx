@@ -175,14 +175,24 @@ option{background:var(--bg3);}
 .test-loading{background:rgba(0,207,255,.08);color:var(--cyan);}
 
 /* ── CHAT ────────────────────────────────────────────────────────────────────── */
-.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 120px);max-height:700px;}
+.chat-layout{display:flex;background:var(--bg2)!important;}
 .chat-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
-.chat-bubble{max-width:72%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word;}
+.chat-bubble{
+  width: fit-content;
+  min-width: 50px;
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
 .chat-bubble.mine{align-self:flex-end;background:rgba(0,255,157,.12);border:1px solid rgba(0,255,157,.2);border-bottom-right-radius:3px;}
 .chat-bubble.theirs{align-self:flex-start;background:var(--bg3);border:1px solid var(--border);border-bottom-left-radius:3px;}
-.chat-meta{font-family:var(--font-mono);font-size:9px;color:var(--text2);margin-bottom:3px;}
+.chat-meta{font-family:var(--font-mono);font-size:9px;color:var(--text2);margin-bottom:3px; opacity: 0.75;}
 .chat-input-row{display:flex;gap:10px;padding:12px;border-top:1px solid var(--border);background:var(--bg2);}
-.chat-input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;resize:none;}
+.chat-input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;resize:none;transition: border-color .2s;}
 .chat-input:focus{border-color:var(--green);}
 
 /* ── AI SUGGESTIONS ──────────────────────────────────────────────────────────── */
@@ -1724,7 +1734,8 @@ function ChatPage({ user, wsRef }) {
               return (
                 <div key={m.id || m._id || idx} style={{ 
                   alignSelf: isMine ? "flex-end" : "flex-start", 
-                  maxWidth: "80%", display: "flex", flexDirection: "column"
+                  maxWidth: "80%", display: "flex", flexDirection: "column",
+                  alignItems: isMine ? "flex-end" : "flex-start"
                 }}>
                   {!isMine && !isSameUser && (
                     <div className="chat-meta" style={{ marginLeft: 4, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
@@ -2278,45 +2289,48 @@ export default function App() {
     wsRef.current = createWS((msg) => {
       if (msg.type === "connected") { setWsConnected(true); return; }
 
-      // Live event (click/lead)
+      // 1. Live event (click/lead)
       if (msg.type === "new_event") {
         setLiveEvents(p => [msg.event, ...p.slice(0, 29)]);
       }
 
-      // Sponsor stats updated (from auto-sync) — refresh dashboard
+      // 2. Sponsor stats updated (from auto-sync) — refresh dashboard
       if (msg.type === "sponsor_updated" || msg.type === "dashboard_refresh") {
         setSponsorStats(p => ({ ...p, ...(msg.sponsorId ? {[msg.sponsorId]: msg.data} : {}) }));
-        // Dispatch custom event so DashboardPage can listen
         window.dispatchEvent(new CustomEvent("affplatform_ws", { detail: msg }));
       }
 
-      // New lead detected!
+      // 3. New lead detected!
       if (msg.type === "new_lead") {
-        const isMailer = !!msg.mailerName; // from conversion sync
-        const title = isMailer
-          ? `💰 New Lead — ${msg.mailerName}`
-          : `💰 New Lead — ${msg.sponsorName || ""}`;
-        const body = isMailer
-          ? `ID: ${msg.mailerId} · +$${Number(msg.revenue || 0).toFixed(2)}`
-          : `${msg.count || 1} lead${(msg.count||1) > 1 ? "s" : ""} · +$${Number(msg.revenue||0).toFixed(2)}`;
-        const notif = {
-          id: Date.now(),
-          title,
-          body,
-          color: msg.sponsorColor || "#00ff9d",
-          time: new Date().toLocaleTimeString(),
-          sponsorId: msg.sponsorId,
-        };
+        const isMailer = !!msg.mailerName;
+        const title = isMailer ? `💰 New Lead — ${msg.mailerName}` : `💰 New Lead — ${msg.sponsorName || ""}`;
+        const body = isMailer ? `ID: ${msg.mailerId} · +$${Number(msg.revenue || 0).toFixed(2)}` : `${msg.count || 1} lead${(msg.count||1) > 1 ? "s" : ""} · +$${Number(msg.revenue||0).toFixed(2)}`;
+        const notif = { id: Date.now(), title, body, color: msg.sponsorColor || "#00ff9d", time: new Date().toLocaleTimeString(), sponsorId: msg.sponsorId };
         setNotifications(p => [notif, ...p.slice(0, 49)]);
         setUnreadCount(p => p + 1);
-        // Desktop notification
         sendNotification(notif.title, notif.body, notif.color);
       }
 
-      // Offers synced
+      // 4. Chat messages (New logic)
+      if (msg.type === "chat_message") {
+        window.dispatchEvent(new CustomEvent("affplatform_ws", { detail: msg }));
+        if (msg.msg && msg.msg.userId !== user.id) {
+          const m = msg.msg;
+          const isPrivate = !!m.to;
+          if (isPrivate && m.to === user.id) {
+            if (page !== "chat") showToast(`📩 Message from ${m.userName}`, "ok");
+            sendNotification(`📩 ${m.userName}`, m.text);
+          } else if (!isPrivate && page !== "chat") {
+            // Optional: notifications for global chat
+          }
+        }
+      }
+
+      // 5. Offers synced
       if (msg.type === "offers_synced") {
         showToast(`📋 ${msg.totalImported} new offers imported`, "ok");
       }
+    });
     });
     return () => { wsRef.current?.close(); setWsConnected(false); };
   }, [user]);
@@ -2454,4 +2468,22 @@ export default function App() {
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToastMsg(null)}/>}
     </>
   );
+}
+
+// ─── NOTIFICATION UTILS ───────────────────────────────────────────────────────
+function requestNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+
+function sendNotification(title, body, color) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const n = new Notification(title, { body, icon: "/favicon.ico" });
+    n.onclick = () => { window.focus(); };
+  } catch (e) {
+    console.error("Desktop notification failed", e);
+  }
 }
