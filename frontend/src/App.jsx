@@ -199,12 +199,34 @@ option{background:var(--bg3);}
 .suggest-metric{background:var(--bg3);border-radius:5px;padding:4px 8px;color:var(--text2);}
 .suggest-metric strong{color:var(--text);}
 
-/* ── HAMBURGER / DRAWER ──────────────────────────────────────────────────────── */
-.hamburger{display:none;background:none;border:none;cursor:pointer;padding:6px;color:var(--text);font-size:20px;line-height:1;}
-.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;backdrop-filter:blur(2px);}
-.drawer-overlay.open{display:block;}
-.sidebar-drawer{position:fixed;left:0;top:0;bottom:0;width:260px;background:var(--bg2);border-right:1px solid var(--border);z-index:201;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .25s ease;}
-.sidebar-drawer.open{transform:translateX(0);}
+/* ── CHAT ─ explicit backgrounds ────────────────────────────────────────────── */
+.chat-wrap{background:var(--bg2)!important;}
+.chat-messages{background:var(--bg);}
+
+/* ── HAMBURGER / MOBILE NAV DROPDOWN ─────────────────────────────────────────── */
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:5px 8px;color:var(--text);font-size:22px;line-height:1;flex-shrink:0;}
+.mobile-nav-backdrop{display:none;position:fixed;inset:0;z-index:299;}
+.mobile-nav-backdrop.open{display:block;}
+.mobile-nav-dropdown{
+  position:fixed;top:50px;left:0;right:0;
+  background:var(--bg2);border-bottom:1px solid var(--border2);
+  display:grid;grid-template-columns:repeat(4,1fr);gap:2px;
+  padding:6px;z-index:300;
+  box-shadow:0 12px 40px rgba(0,0,0,.6);
+  opacity:0;visibility:hidden;transform:translateY(-10px);
+  transition:opacity .18s ease,transform .18s ease,visibility .18s;
+}
+.mobile-nav-dropdown.open{opacity:1;visibility:visible;transform:translateY(0);}
+.mobile-nav-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;padding:12px 6px;cursor:pointer;border-radius:8px;
+  font-size:10px;font-weight:700;color:var(--text2);
+  background:transparent;border:none;transition:all .12s;
+}
+.mobile-nav-btn .nav-icon{font-size:22px;line-height:1;display:block;}
+.mobile-nav-btn:hover{color:var(--text);background:rgba(255,255,255,.05);}
+.mobile-nav-btn.active{color:var(--green);background:rgba(0,255,157,.08);}
+.mobile-nav-btn.active .nav-icon{filter:drop-shadow(0 0 5px var(--green));}
 
 /* ── MOBILE RESPONSIVE ──────────────────────────────────────────────────────── */
 @media(max-width:768px){
@@ -1617,44 +1639,84 @@ function ChatPage({ user, wsRef }) {
 
 // ─── AI SUGGESTIONS PAGE ───────────────────────────────────────────────────────
 function AISuggestPage({ toast }) {
-  const [data, setData]       = useState(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
+  const [period,  setPeriod]  = useState("30d");
+  const [from,    setFrom]    = useState("");
+  const [to,      setTo]      = useState(today);
 
-  const load = async () => {
+  const load = async (p, f, t) => {
     setLoading(true);
-    try { setData(await api.offerSuggestions()); }
-    catch (e) { toast(e.message, "err"); }
+    try {
+      const params = new URLSearchParams();
+      if (p === "custom" && f && t) { params.set("from", f); params.set("to", t); }
+      else params.set("period", p || "30d");
+      const r = await fetch(`/api/ai/offer-suggestions?${params}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("affplatform_token")}` },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setData(await r.json());
+    } catch (e) { toast(e.message, "err"); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(period, from, to); }, []);
+
+  const PERIODS = [
+    { id:"today", label:"Today" },
+    { id:"7d",    label:"7 Days" },
+    { id:"mtd",   label:"Month to Date" },
+    { id:"30d",   label:"30 Days" },
+    { id:"custom",label:"Custom" },
+  ];
 
   const tiers = [
-    { key: "hot",      label: "🔥 Hot — Push Now",        cls: "suggest-hot",      color: "#ff453a" },
-    { key: "rising",   label: "📈 Rising — Scale Up",      cls: "suggest-rising",   color: "#00cfff" },
-    { key: "untapped", label: "💡 Untapped Potential",      cls: "suggest-untapped", color: "#bf5af2" },
+    { key:"hot",      label:"🔥 Hot — Push Now",     cls:"suggest-hot",      color:"#ff453a" },
+    { key:"rising",   label:"📈 Rising — Scale Up",   cls:"suggest-rising",   color:"#00cfff" },
+    { key:"untapped", label:"💡 Untapped Potential",   cls:"suggest-untapped", color:"#bf5af2" },
   ];
 
   return (
     <>
-      <div className="sec-title" style={{marginBottom:8}}>
-        AI Offer Suggestions
-        <button className="btn btn-sm" onClick={load} disabled={loading} style={{marginLeft:"auto"}}>
-          {loading ? "⟳ Analyzing…" : "↺ Refresh"}
+      {/* Period selector */}
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:16}}>
+        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",textTransform:"uppercase",letterSpacing:.8}}>Period:</span>
+        {PERIODS.map(p=>(
+          <button key={p.id}
+            className={`btn btn-sm${period===p.id?" btn-primary":""}`}
+            onClick={()=>{ setPeriod(p.id); if(p.id!=="custom") load(p.id); }}
+          >{p.label}</button>
+        ))}
+        {period === "custom" && (
+          <>
+            <input type="date" className="form-input" style={{width:130,padding:"4px 8px",fontSize:11}} value={from} onChange={e=>setFrom(e.target.value)} max={to}/>
+            <span style={{color:"var(--text2)",fontSize:11}}>→</span>
+            <input type="date" className="form-input" style={{width:130,padding:"4px 8px",fontSize:11}} value={to} onChange={e=>setTo(e.target.value)} max={today}/>
+            <button className="btn btn-sm btn-primary" onClick={()=>load("custom",from,to)} disabled={!from||!to}>Apply</button>
+          </>
+        )}
+        <button className="btn btn-sm" onClick={()=>load(period,from,to)} disabled={loading} style={{marginLeft:"auto"}}>
+          {loading ? "⟳" : "↺ Refresh"}
         </button>
       </div>
+
       {data && (
-        <div style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text2)",marginBottom:20}}>
-          Analyzed {data.total} offers · {(data.hot?.length||0) + (data.rising?.length||0) + (data.untapped?.length||0)} suggestions
+        <div style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text2)",marginBottom:16,display:"flex",gap:16,flexWrap:"wrap"}}>
+          <span>📊 {data.total} offers analyzed</span>
+          <span>🔄 {data.totalConversions} conversions in range</span>
+          <span>📅 {data.fromDate} → {data.toDate}</span>
         </div>
       )}
-      {loading && <div className="loader">⟳ Scoring offers…</div>}
+
+      {loading && <div className="loader">⟳ Scoring offers from real data…</div>}
+
       {!loading && data && tiers.map(({ key, label, cls, color }) => {
         const items = data[key] || [];
         if (!items.length) return null;
         return (
           <div key={key} style={{marginBottom:28}}>
-            <div style={{fontSize:13,fontWeight:800,marginBottom:4,color}}>{label}</div>
+            <div style={{fontSize:13,fontWeight:800,marginBottom:8,color}}>{label}</div>
             <div className="suggest-grid">
               {items.map(o => (
                 <div key={o.id || o._id} className={`suggest-card ${cls}`}>
@@ -1663,9 +1725,8 @@ function AISuggestPage({ toast }) {
                   <div className="suggest-reason">{o._reason}</div>
                   <div className="suggest-metrics">
                     <span className="suggest-metric">Leads <strong>{o._leads}</strong></span>
-                    <span className="suggest-metric">Rev <strong>${(o._revenue||0).toFixed(0)}</strong></span>
-                    <span className="suggest-metric">7d <strong>{o._recent}</strong></span>
-                    <span className="suggest-metric">Clicks <strong>{o._clicks}</strong></span>
+                    <span className="suggest-metric">Rev <strong>${(o._revenue||0).toFixed(2)}</strong></span>
+                    <span className="suggest-metric">Last 7d <strong>{o._recent}</strong></span>
                   </div>
                 </div>
               ))}
@@ -1673,10 +1734,12 @@ function AISuggestPage({ toast }) {
           </div>
         );
       })}
+
       {!loading && data && (data.hot?.length + data.rising?.length + data.untapped?.length) === 0 && (
         <div className="loader" style={{height:200,flexDirection:"column",gap:8}}>
           <span style={{fontSize:28}}>📭</span>
-          <span>No offers with data yet — sync conversions first</span>
+          <span style={{color:"var(--text2)"}}>No offers with conversions in this period</span>
+          <span style={{fontSize:11,color:"var(--text2)"}}>Try a wider date range or sync conversions first</span>
         </div>
       )}
     </>
@@ -2023,7 +2086,7 @@ function AIPage({ toast }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const VALID_PAGES = ["dashboard","sponsors","offers","tracking","ai","settings"];
+  const VALID_PAGES = ["dashboard","sponsors","offers","tracking","ai","suggest","chat","settings"];
   function pageFromPath() {
     const p = window.location.pathname.replace(/^\//, "").split("/")[0];
     return VALID_PAGES.includes(p) ? p : "dashboard";
@@ -2151,36 +2214,19 @@ export default function App() {
     window.history.pushState({}, "", "/" + id);
   };
 
-  const SidebarContent = () => (
-    <>
-      <div className="logo-wrap"><div className="logo"><em>Aff</em>Intel</div><div className="logo-tag">AFFILIATE PLATFORM v3</div></div>
-      <nav className="nav">
-        <div className="nav-sec">Navigation</div>
-        {nav.map(n=>(
-          <div key={n.id} className={`nav-item${page===n.id?" active":""}`} onClick={()=>goTo(n.id)}>
-            <span style={{width:18,textAlign:"center"}}>{n.icon}</span>{n.label}
-            {n.id==="tracking" && liveEvents.length>0 && <span className="nav-badge">{liveEvents.length}</span>}
-          </div>
-        ))}
-      </nav>
-      <div className="sidebar-foot">
-        <div className="sync-row"><span className="pulse"/>{wsConnected ? "WS connected" : "WS offline"}</div>
-        <div className="user-row">
-          <div className="avatar">{user.name[0]}</div>
-          <div><div className="user-name">{user.name}</div><div className="user-role">{user.role.toUpperCase()}</div></div>
-        </div>
-      </div>
-    </>
-  );
-
   return (
     <>
       <style>{CSS}</style>
-      {/* Mobile drawer overlay */}
-      <div className={`drawer-overlay${drawerOpen?" open":""}`} onClick={()=>setDrawerOpen(false)}/>
-      <aside className={`sidebar-drawer${drawerOpen?" open":""}`}>
-        <SidebarContent/>
-      </aside>
+      {/* Mobile: backdrop + horizontal nav dropdown */}
+      <div className={`mobile-nav-backdrop${drawerOpen?" open":""}`} onClick={()=>setDrawerOpen(false)}/>
+      <div className={`mobile-nav-dropdown${drawerOpen?" open":""}`}>
+        {nav.map(n=>(
+          <button key={n.id} className={`mobile-nav-btn${page===n.id?" active":""}`} onClick={()=>goTo(n.id)}>
+            <span className="nav-icon">{n.icon}</span>
+            <span>{n.label}</span>
+          </button>
+        ))}
+      </div>
       <div className="app">
         {/* Desktop sidebar */}
         <aside className="sidebar">

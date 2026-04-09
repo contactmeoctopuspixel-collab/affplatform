@@ -47,64 +47,89 @@ router.post("/sync-offers", requireEditor, async (req, res) => {
   } catch (e) { console.error("sync-offers background error:", e.message); }
 });
 
-// GET /api/ai/offer-suggestions — score & rank offers by performance data
+// GET /api/ai/offer-suggestions?period=7d|mtd|30d&from=YYYY-MM-DD&to=YYYY-MM-DD
+// Scores offers using REAL conversion data (leads/revenue from conversions table)
 router.get("/offer-suggestions", async (req, res) => {
   try {
-    const now      = Date.now();
-    const day7ago  = new Date(now - 7  * 86400000).toISOString();
-    const day30ago = new Date(now - 30 * 86400000).toISOString();
+    const { period, from: fromParam, to: toParam } = req.query;
+    const now = new Date();
+
+    // Resolve date range
+    let fromDate, toDate;
+    if (fromParam && toParam) {
+      fromDate = new Date(fromParam).toISOString();
+      toDate   = new Date(toParam + "T23:59:59.999Z").toISOString();
+    } else {
+      toDate = now.toISOString();
+      if (period === "7d")  fromDate = new Date(now - 7  * 86400000).toISOString();
+      else if (period === "mtd") fromDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      else if (period === "today") fromDate = new Date(now.toISOString().slice(0,10)).toISOString();
+      else                   fromDate = new Date(now - 30 * 86400000).toISOString(); // default 30d
+    }
+
+    // Last 7 days within the selected range for "recent activity" tier
+    const recentCutoff = new Date(Math.max(
+      new Date(fromDate).getTime(),
+      now.getTime() - 7 * 86400000
+    )).toISOString();
 
     const [offers, conversions] = await Promise.all([
       db.offers.find({ status: { $ne: "expired" } }),
-      db.conversions.find({ created_at: { $gte: day30ago } }),
+      db.conversions.find({ created_at: { $gte: fromDate, $lte: toDate } }),
     ]);
 
-    // Aggregate conversions per offer_id
+    // Build per-offer stats from REAL conversion data (date-filtered)
     const convMap = {};
     for (const cv of conversions) {
-      const oid = String(cv.offer_id || "");
+      const oid = String(cv.offer_id || "").trim();
       if (!oid) continue;
       if (!convMap[oid]) convMap[oid] = { leads: 0, revenue: 0, recent: 0 };
       convMap[oid].leads++;
       convMap[oid].revenue += parseFloat(cv.revenue || 0);
-      if (cv.created_at >= day7ago) convMap[oid].recent++;
+      if (cv.created_at >= recentCutoff) convMap[oid].recent++;
     }
 
-    // Score each offer
+    // Score — do NOT use o.clicks (YTD, not date-filtered)
+    // Use conversion rate only when we have real data
     const scored = offers.map(o => {
-      const extId = String(o.external_id || o.id || "");
-      const cv    = convMap[extId] || { leads: 0, revenue: 0, recent: 0 };
-      const clicks   = o.clicks || 0;
-      const leads    = cv.leads;
-      const revenue  = cv.revenue;
-      const recent   = cv.recent;
-      const cvr      = clicks > 0 ? (leads / clicks) * 100 : 0;
+      const extId   = String(o.external_id || "").trim();
+      const cv      = convMap[extId] || { leads: 0, revenue: 0, recent: 0 };
+      const leads   = cv.leads;
+      const revenue = cv.revenue;
+      const recent  = cv.recent;
 
-      // Weighted score
-      const score = (leads * 12) + (revenue * 1.5) + (recent * 20) + (cvr * 5) + (clicks * 0.1);
+      // Score based entirely on conversion data (date-filtered)
+      const score = (leads * 15) + (revenue * 2) + (recent * 25);
 
       let tier = "cold";
-      if (recent >= 3 || score >= 150) tier = "hot";
-      else if (recent >= 1 || score >= 50) tier = "rising";
-      else if (o.tracking_url && leads === 0 && clicks > 0) tier = "untapped";
+      if (recent >= 2 || (leads >= 5 && score >= 100)) tier = "hot";
+      else if (recent >= 1 || leads >= 2)              tier = "rising";
+      else if (leads === 0 && o.tracking_url)          tier = "untapped";
 
+      const label = period === "7d" ? "7 days" : period === "mtd" ? "month-to-date" : period === "today" ? "today" : "30 days";
       let reason = "";
-      if (tier === "hot")     reason = `${recent} leads last 7d · $${revenue.toFixed(0)} rev · ${cvr.toFixed(1)}% CVR`;
-      if (tier === "rising")  reason = `${leads} leads · $${revenue.toFixed(0)} rev · growing`;
-      if (tier === "untapped")reason = `${clicks} clicks, no conversions yet — try different mailer`;
-      if (tier === "cold")    reason = leads > 0 ? `${leads} leads total, no recent activity` : "no activity";
+      if (tier === "hot")     reason = `${recent} leads last 7d · $${revenue.toFixed(2)} rev in ${label}`;
+      if (tier === "rising")  reason = `${leads} leads · $${revenue.toFixed(2)} rev in ${label}`;
+      if (tier === "untapped")reason = `Has tracking URL but 0 conversions in ${label} — test it`;
+      if (tier === "cold")    reason = `No conversions in ${label}`;
 
-      return { ...o, _score: score, _tier: tier, _reason: reason, _leads: leads, _revenue: revenue, _recent: recent, _clicks: clicks };
+      return { ...o, _score: score, _tier: tier, _reason: reason, _leads: leads, _revenue: revenue, _recent: recent };
     });
 
-    // Sort by score desc
     scored.sort((a, b) => b._score - a._score);
 
-    const hot      = scored.filter(o => o._tier === "hot").slice(0, 8);
-    const rising   = scored.filter(o => o._tier === "rising").slice(0, 8);
-    const untapped = scored.filter(o => o._tier === "untapped").slice(0, 6);
+    const hot      = scored.filter(o => o._tier === "hot").slice(0, 10);
+    const rising   = scored.filter(o => o._tier === "rising").slice(0, 10);
+    const untapped = scored.filter(o => o._tier === "untapped").slice(0, 8);
 
-    res.json({ hot, rising, untapped, total: offers.length, scored: scored.length });
+    res.json({
+      hot, rising, untapped,
+      total: offers.length,
+      totalConversions: conversions.length,
+      period: period || "30d",
+      fromDate: fromDate.slice(0,10),
+      toDate:   toDate.slice(0,10),
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
