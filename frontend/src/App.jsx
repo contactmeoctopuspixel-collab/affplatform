@@ -1577,22 +1577,18 @@ function ChatPage({ user, wsRef }) {
   }, [loadHistory]);
 
   useEffect(() => {
-    const ws = wsRef.current;
-    if (!ws) return;
     const handler = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "chat_message" && msg.msg) {
-          setMessages(p => {
-            if (p.find(m => m.id === msg.msg.id || m._id === msg.msg._id)) return p;
-            return [...p, msg.msg];
-          });
-        }
-      } catch (err) {}
+      const msg = e.detail;
+      if (msg && msg.type === "chat_message" && msg.msg) {
+        setMessages(p => {
+          if (p.find(m => m.id === msg.msg.id || m._id === msg.msg._id)) return p;
+          return [...p, msg.msg];
+        });
+      }
     };
-    ws.addEventListener("message", handler);
-    return () => ws.removeEventListener("message", handler);
-  }, [wsRef.current]);
+    window.addEventListener("affplatform_ws", handler);
+    return () => window.removeEventListener("affplatform_ws", handler);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
