@@ -97,11 +97,11 @@ router.get("/offer-suggestions", async (req, res) => {
         const data = await r.json();
         const rows = data?.table || [];
         for (const row of rows) {
-          const cols   = row.columns || [];
-          const offId  = String(cols[0]?.id || "");
-          const clicks = parseInt(cols[2]?.value || 0) || 0;
-          const leads  = parseInt(cols[3]?.value || 0) || 0;
-          const rev    = parseFloat(cols[4]?.value || 0) || 0;
+          const offId  = String(row.columns?.[0]?.id || "");
+          const rep    = row.reporting || {};
+          const clicks = parseInt(rep.total_click || 0) || 0;
+          const leads  = parseInt(rep.cv || 0) || 0;
+          const rev    = parseFloat(rep.revenue || 0) || 0;
           if (!offId) continue;
           if (!perfMap[offId]) perfMap[offId] = { clicks: 0, leads: 0, revenue: 0 };
           perfMap[offId].clicks  += clicks;
