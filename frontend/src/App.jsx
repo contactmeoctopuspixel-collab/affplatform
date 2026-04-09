@@ -1556,26 +1556,39 @@ function ChatPage({ user, wsRef }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
   const bottomRef = useRef(null);
 
-  useEffect(() => {
-    api.chatHistory(80).then(r => setMessages(r.messages)).catch(() => {});
+  const loadHistory = useCallback(async () => {
+    try {
+      const r = await api.chatHistory(100);
+      if (r && Array.isArray(r.messages)) {
+        setMessages(r.messages);
+      }
+    } catch (e) {
+      console.error("Chat history error:", e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Listen for incoming WS chat messages
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
   useEffect(() => {
     const ws = wsRef.current;
     if (!ws) return;
     const handler = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        if (msg.type === "chat_message") {
+        if (msg.type === "chat_message" && msg.msg) {
           setMessages(p => {
-            if (p.find(m => m.id === msg.msg.id)) return p;
+            if (p.find(m => m.id === msg.msg.id || m._id === msg.msg._id)) return p;
             return [...p, msg.msg];
           });
         }
-      } catch {}
+      } catch (err) {}
     };
     ws.addEventListener("message", handler);
     return () => ws.removeEventListener("message", handler);
@@ -1590,8 +1603,14 @@ function ChatPage({ user, wsRef }) {
     if (!t || sending) return;
     setSending(true);
     setText("");
-    try { await api.chatSend(t); } catch {}
-    setSending(false);
+    try {
+      await api.chatSend(t);
+    } catch (e) {
+      alert("Failed to send: " + e.message);
+      setText(t);
+    } finally {
+      setSending(false);
+    }
   };
 
   const onKey = (e) => {
@@ -1599,46 +1618,116 @@ function ChatPage({ user, wsRef }) {
   };
 
   const fmt = (iso) => {
+    if (!iso) return "";
     const d = new Date(iso);
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  if (loading) return <div className="loader">⟳ Connecting to team chat…</div>;
+
   return (
-    <div className="card chat-wrap">
-      <div className="card-head">
-        <span className="card-title">Team Chat</span>
-        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>{messages.length} messages</span>
+    <div className="card chat-wrap" style={{ height: "calc(100vh - 120px)", display: "flex", flexDirection: "column" }}>
+      <div className="card-head" style={{ borderBottom: "1px solid var(--border2)", background: "rgba(255,255,255,0.02)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>💬</span>
+          <span className="card-title" style={{ fontSize: 12 }}>Team Channel</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="pulse" style={{ background: "var(--green)", width: 6, height: 6 }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text2)" }}>
+            {messages.length} messages
+          </span>
+        </div>
       </div>
-      <div className="chat-messages">
-        {messages.length === 0 && (
-          <div style={{textAlign:"center",color:"var(--text2)",fontFamily:"var(--font-mono)",fontSize:11,marginTop:40}}>
-            No messages yet — say hi! 👋
+
+      <div className="chat-messages" style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 12, background: "rgba(0,0,0,0.2)" }}>
+        {messages.length === 0 ? (
+          <div style={{ margin: "auto", textAlign: "center", opacity: 0.5 }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🛰️</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>Channel established. Start the conversation.</div>
           </div>
+        ) : (
+          messages.map((m, idx) => {
+            const isMine = m.userId === user.id;
+            const prevMsg = messages[idx - 1];
+            const isSameUser = prevMsg && prevMsg.userId === m.userId;
+            
+            return (
+              <div key={m.id || m._id || idx} style={{ 
+                alignSelf: isMine ? "flex-end" : "flex-start", 
+                maxWidth: "80%",
+                display: "flex",
+                flexDirection: "column"
+              }}>
+                {!isMine && !isSameUser && (
+                  <div className="chat-meta" style={{ marginLeft: 4, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "var(--cyan)", fontWeight: 700 }}>{m.userName}</span>
+                    <span style={{ fontSize: 8, opacity: 0.5 }}>• {fmt(m.created_at)}</span>
+                  </div>
+                )}
+                
+                <div className={`chat-bubble ${isMine ? "mine" : "theirs"}`} style={{
+                  padding: "10px 14px",
+                  borderRadius: "14px",
+                  fontSize: "13px",
+                  lineHeight: "1.5",
+                  background: isMine ? "linear-gradient(135deg, rgba(0,255,157,0.15), rgba(0,207,255,0.1))" : "var(--bg3)",
+                  border: isMine ? "1px solid rgba(0,255,157,0.2)" : "1px solid var(--border)",
+                  borderBottomRightRadius: isMine ? "2px" : "14px",
+                  borderBottomLeftRadius: !isMine ? "2px" : "14px",
+                  boxShadow: isMine ? "0 4px 12px rgba(0,255,157,0.05)" : "none"
+                }}>
+                  {m.text}
+                </div>
+                
+                {isMine && !isSameUser && (
+                  <div className="chat-meta" style={{ alignSelf: "flex-end", marginRight: 4, marginTop: 4, fontSize: 8, opacity: 0.5 }}>
+                    {fmt(m.created_at)}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
-        {messages.map(m => {
-          const mine = m.userId === user.id;
-          return (
-            <div key={m.id} style={{alignSelf: mine ? "flex-end" : "flex-start", maxWidth:"72%"}}>
-              {!mine && <div className="chat-meta">{m.userName} · {fmt(m.created_at)}</div>}
-              <div className={`chat-bubble ${mine ? "mine" : "theirs"}`}>{m.text}</div>
-              {mine && <div className="chat-meta" style={{textAlign:"right"}}>{fmt(m.created_at)}</div>}
-            </div>
-          );
-        })}
-        <div ref={bottomRef}/>
+        <div ref={bottomRef} />
       </div>
-      <div className="chat-input-row">
-        <textarea
-          className="chat-input"
-          rows={1}
-          placeholder="Type a message… (Enter to send)"
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={onKey}
-        />
-        <button className="btn btn-primary" onClick={send} disabled={!text.trim() || sending}>
-          {sending ? "…" : "Send"}
-        </button>
+
+      <div className="chat-input-row" style={{ padding: "16px", background: "var(--bg2)", borderTop: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", gap: 10, position: "relative" }}>
+          <textarea
+            className="chat-input"
+            rows={1}
+            placeholder="Write a message..."
+            style={{ 
+              borderRadius: "10px", 
+              paddingRight: "80px",
+              minHeight: "44px",
+              maxHeight: "120px"
+            }}
+            value={text}
+            onChange={e => {
+              setText(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = e.target.scrollHeight + "px";
+            }}
+            onKeyDown={onKey}
+          />
+          <button 
+            className="btn btn-primary" 
+            style={{ 
+              position: "absolute", 
+              right: "6px", 
+              top: "6px", 
+              bottom: "6px", 
+              borderRadius: "8px",
+              padding: "0 20px"
+            }} 
+            onClick={send} 
+            disabled={!text.trim() || sending}
+          >
+            {sending ? "..." : "Send"}
+          </button>
+        </div>
       </div>
     </div>
   );
