@@ -2467,21 +2467,3 @@ export default function App() {
     </>
   );
 }
-
-// ─── NOTIFICATION UTILS ───────────────────────────────────────────────────────
-function requestNotificationPermission() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-}
-
-function sendNotification(title, body, color) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  try {
-    const n = new Notification(title, { body, icon: "/favicon.ico" });
-    n.onclick = () => { window.focus(); };
-  } catch (e) {
-    console.error("Desktop notification failed", e);
-  }
-}
