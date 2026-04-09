@@ -204,29 +204,36 @@ option{background:var(--bg3);}
 .chat-messages{background:var(--bg);}
 
 /* ── HAMBURGER / MOBILE NAV DROPDOWN ─────────────────────────────────────────── */
-.hamburger{display:none;background:none;border:none;cursor:pointer;padding:5px 8px;color:var(--text);font-size:22px;line-height:1;flex-shrink:0;}
-.mobile-nav-backdrop{display:none;position:fixed;inset:0;z-index:299;}
-.mobile-nav-backdrop.open{display:block;}
-.mobile-nav-dropdown{
-  position:fixed;top:50px;left:0;right:0;
-  background:var(--bg2);border-bottom:1px solid var(--border2);
-  display:grid;grid-template-columns:repeat(4,1fr);gap:2px;
-  padding:6px;z-index:300;
-  box-shadow:0 12px 40px rgba(0,0,0,.6);
-  opacity:0;visibility:hidden;transform:translateY(-10px);
-  transition:opacity .18s ease,transform .18s ease,visibility .18s;
+.hamburger{display:none;background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:5px 9px;color:var(--text);font-size:20px;line-height:1;flex-shrink:0;}
+
+/* LEFT SIDE DRAWER */
+.drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:299;backdrop-filter:blur(2px);}
+.drawer-backdrop.open{display:block;}
+.sidebar-drawer{
+  position:fixed;left:0;top:0;bottom:0;width:270px;
+  background:var(--bg2);border-right:1px solid var(--border2);
+  z-index:300;display:flex;flex-direction:column;
+  transform:translateX(-100%);transition:transform .25s ease;
+  box-shadow:12px 0 40px rgba(0,0,0,.5);
 }
-.mobile-nav-dropdown.open{opacity:1;visibility:visible;transform:translateY(0);}
-.mobile-nav-btn{
+.sidebar-drawer.open{transform:translateX(0);}
+.drawer-head{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.drawer-logo{font-size:16px;font-weight:900;}.drawer-logo em{color:var(--green);font-style:normal;}
+.drawer-close{background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer;padding:4px;}
+/* 2-column horizontal grid of nav items inside drawer */
+.drawer-nav-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;padding:12px;}
+.drawer-nav-btn{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:5px;padding:12px 6px;cursor:pointer;border-radius:8px;
-  font-size:10px;font-weight:700;color:var(--text2);
-  background:transparent;border:none;transition:all .12s;
+  gap:6px;padding:16px 8px;border-radius:10px;cursor:pointer;
+  font-size:11px;font-weight:700;color:var(--text2);
+  background:var(--bg3);border:1px solid var(--border);transition:all .12s;
 }
-.mobile-nav-btn .nav-icon{font-size:22px;line-height:1;display:block;}
-.mobile-nav-btn:hover{color:var(--text);background:rgba(255,255,255,.05);}
-.mobile-nav-btn.active{color:var(--green);background:rgba(0,255,157,.08);}
-.mobile-nav-btn.active .nav-icon{filter:drop-shadow(0 0 5px var(--green));}
+.drawer-nav-btn .nav-icon{font-size:26px;line-height:1;}
+.drawer-nav-btn:hover{color:var(--text);background:var(--bg4);border-color:var(--border2);}
+.drawer-nav-btn.active{color:var(--green);background:rgba(0,255,157,.08);border-color:rgba(0,255,157,.25);}
+.drawer-nav-btn.active .nav-icon{filter:drop-shadow(0 0 6px var(--green));}
+.drawer-user{padding:12px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;margin-top:auto;}
+
 
 /* ── MOBILE RESPONSIVE ──────────────────────────────────────────────────────── */
 @media(max-width:768px){
@@ -2217,15 +2224,25 @@ export default function App() {
   return (
     <>
       <style>{CSS}</style>
-      {/* Mobile: backdrop + horizontal nav dropdown */}
-      <div className={`mobile-nav-backdrop${drawerOpen?" open":""}`} onClick={()=>setDrawerOpen(false)}/>
-      <div className={`mobile-nav-dropdown${drawerOpen?" open":""}`}>
-        {nav.map(n=>(
-          <button key={n.id} className={`mobile-nav-btn${page===n.id?" active":""}`} onClick={()=>goTo(n.id)}>
-            <span className="nav-icon">{n.icon}</span>
-            <span>{n.label}</span>
-          </button>
-        ))}
+      {/* Mobile: left side drawer with 2-col horizontal grid */}
+      <div className={`drawer-backdrop${drawerOpen?" open":""}`} onClick={()=>setDrawerOpen(false)}/>
+      <div className={`sidebar-drawer${drawerOpen?" open":""}`}>
+        <div className="drawer-head">
+          <div className="drawer-logo"><em>Aff</em>Intel</div>
+          <button className="drawer-close" onClick={()=>setDrawerOpen(false)}>✕</button>
+        </div>
+        <div className="drawer-nav-grid">
+          {nav.map(n=>(
+            <button key={n.id} className={`drawer-nav-btn${page===n.id?" active":""}`} onClick={()=>goTo(n.id)}>
+              <span className="nav-icon">{n.icon}</span>
+              <span>{n.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="drawer-user">
+          <div className="avatar">{user.name[0]}</div>
+          <div><div className="user-name">{user.name}</div><div className="user-role">{user.role.toUpperCase()}</div></div>
+        </div>
       </div>
       <div className="app">
         {/* Desktop sidebar */}

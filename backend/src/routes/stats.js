@@ -429,4 +429,24 @@ router.post("/conv-sync-now", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/stats/debug-ids — check offer_id vs external_id matching
+router.get("/debug-ids", async (req, res) => {
+  try {
+    const convSamples  = await db.conversions.find({}).limit(5);
+    const offerSamples = await db.offers.find({}).limit(5);
+    const allConvIds   = (await db.conversions.find({})).map(c => c.offer_id).filter(Boolean);
+    const allExtIds    = (await db.offers.find({})).map(o => o.external_id).filter(Boolean);
+    const matched = allConvIds.filter(id => allExtIds.includes(id));
+    res.json({
+      conv_sample_offer_ids: convSamples.map(c => ({ offer_id: c.offer_id, created_at: c.created_at })),
+      offer_sample_ext_ids:  offerSamples.map(o => ({ external_id: o.external_id, name: o.name?.slice(0,30) })),
+      total_conversions: allConvIds.length,
+      total_offers: allExtIds.length,
+      matched_ids: matched.length,
+      sample_matched: matched.slice(0, 5),
+      sample_unmatched_conv: allConvIds.filter(id => !allExtIds.includes(id)).slice(0, 5),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
