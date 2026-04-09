@@ -1552,43 +1552,64 @@ async function importAllOffersFromBrowser(sponsorId, sponsorName, apiKey, toast)
 }
 
 // ─── CHAT PAGE ────────────────────────────────────────────────────────────────
+// ─── CHAT PAGE ────────────────────────────────────────────────────────────────
 function ChatPage({ user, wsRef }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [targetId, setTargetId] = useState("global"); // "global" or userId
+  const [users, setUsers] = useState([]);
   const bottomRef = useRef(null);
 
-  const loadHistory = useCallback(async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
-      const r = await api.chatHistory(100);
+      // 1. Fetch users for the contact list
+      const uRes = await api.getUsers();
+      if (uRes && uRes.users) {
+        setUsers(uRes.users.filter(u => u.id !== user.id)); // All except me
+      }
+      // 2. Fetch history for current target
+      const r = await api.chatHistory(100, targetId);
       if (r && Array.isArray(r.messages)) {
         setMessages(r.messages);
       }
     } catch (e) {
-      console.error("Chat history error:", e);
+      console.error("Chat load error:", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [targetId, user.id]);
 
-  useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
+  useEffect(() => { loadData(); }, [loadData]);
 
+  // Listen for real-time WebSocket messages
   useEffect(() => {
     const handler = (e) => {
       const msg = e.detail;
       if (msg && msg.type === "chat_message" && msg.msg) {
-        setMessages(p => {
-          if (p.find(m => m.id === msg.msg.id || m._id === msg.msg._id)) return p;
-          return [...p, msg.msg];
-        });
+        const m = msg.msg;
+        // Logic to decide if we show this message in current view
+        const isGlobalView = targetId === "global";
+        const isMsgGlobal = !m.to;
+        const belongsInGlobal = isGlobalView && isMsgGlobal;
+        const belongsInPrivate = !isGlobalView && (
+          (m.userId === targetId && m.to === user.id) || // from them to me
+          (m.userId === user.id && m.to === targetId)    // from me to them
+        );
+
+        if (belongsInGlobal || belongsInPrivate) {
+          setMessages(p => {
+            if (p.find(old => old.id === m.id || old._id === m._id)) return p;
+            return [...p, m];
+          });
+        }
       }
     };
     window.addEventListener("affplatform_ws", handler);
     return () => window.removeEventListener("affplatform_ws", handler);
-  }, []);
+  }, [targetId, user.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1598,12 +1619,25 @@ function ChatPage({ user, wsRef }) {
     const t = text.trim();
     if (!t || sending) return;
     setSending(true);
+    
+    // Optimistic UI update: add message instantly so user sees it
+    const tempMsg = {
+      id: Date.now() + "-temp",
+      userId: user.id,
+      userName: user.name,
+      text: t,
+      created_at: new Date().toISOString(),
+      to: targetId === "global" ? null : targetId
+    };
+    setMessages(prev => [...prev, tempMsg]);
     setText("");
+
     try {
-      await api.chatSend(t);
+      await api.chatSend(t, targetId === "global" ? null : targetId);
     } catch (e) {
       alert("Failed to send: " + e.message);
       setText(t);
+      setMessages(prev => prev.filter(m => m.id !== tempMsg.id)); // remove if failed
     } finally {
       setSending(false);
     }
@@ -1619,115 +1653,134 @@ function ChatPage({ user, wsRef }) {
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  if (loading) return <div className="loader">⟳ Connecting to team chat…</div>;
+  const currentTargetName = targetId === "global" ? "Team Global" : (users.find(u => u.id === targetId)?.name || "User");
 
   return (
-    <div className="card chat-wrap" style={{ height: "calc(100vh - 120px)", display: "flex", flexDirection: "column" }}>
-      <div className="card-head" style={{ borderBottom: "1px solid var(--border2)", background: "rgba(255,255,255,0.02)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 18 }}>💬</span>
-          <span className="card-title" style={{ fontSize: 12 }}>Team Channel</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="pulse" style={{ background: "var(--green)", width: 6, height: 6 }} />
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text2)" }}>
-            {messages.length} messages
-          </span>
+    <div className="card chat-layout" style={{ height: "calc(100vh - 120px)", display: "flex", overflow: "hidden" }}>
+      
+      {/* ── LEFT: CONTACT LIST ── */}
+      <div style={{ width: 220, background: "rgba(0,0,0,0.15)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "16px 20px", fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5 }}>Channels</div>
+        <div 
+          onClick={() => setTargetId("global")}
+          style={{ 
+            padding: "10px 20px", cursor: "pointer", fontSize: 13, 
+            background: targetId === "global" ? "rgba(0,255,157,0.1)" : "transparent",
+            color: targetId === "global" ? "var(--green)" : "var(--text)",
+            borderLeft: targetId === "global" ? "3px solid var(--green)" : "3px solid transparent",
+            fontWeight: targetId === "global" ? 700 : 400
+          }}
+        >🌍 Global Team</div>
+        
+        <div style={{ padding: "20px 20px 8px", fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5 }}>Private Messages</div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {users.map(u => (
+            <div 
+              key={u.id}
+              onClick={() => setTargetId(u.id)}
+              style={{ 
+                padding: "10px 20px", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 8,
+                background: targetId === u.id ? "rgba(0,255,157,0.1)" : "transparent",
+                color: targetId === u.id ? "var(--green)" : "var(--text)",
+                borderLeft: targetId === u.id ? "3px solid var(--green)" : "3px solid transparent"
+              }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--text3)", opacity: 0.4 }} />
+              {u.name}
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="chat-messages" style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 12, background: "rgba(0,0,0,0.2)" }}>
-        {messages.length === 0 ? (
-          <div style={{ margin: "auto", textAlign: "center", opacity: 0.5 }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>🛰️</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>Channel established. Start the conversation.</div>
+      {/* ── RIGHT: MESSAGES ── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--bg1)" }}>
+        
+        <div className="card-head" style={{ borderBottom: "1px solid var(--border2)", background: "rgba(255,255,255,0.02)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 16 }}>{targetId === "global" ? "🌍" : "👤"}</span>
+            <span className="card-title" style={{ fontSize: 13 }}>{currentTargetName}</span>
           </div>
-        ) : (
-          messages.map((m, idx) => {
-            const isMine = m.userId === user.id;
-            const prevMsg = messages[idx - 1];
-            const isSameUser = prevMsg && prevMsg.userId === m.userId;
-            
-            return (
-              <div key={m.id || m._id || idx} style={{ 
-                alignSelf: isMine ? "flex-end" : "flex-start", 
-                maxWidth: "80%",
-                display: "flex",
-                flexDirection: "column"
-              }}>
-                {!isMine && !isSameUser && (
-                  <div className="chat-meta" style={{ marginLeft: 4, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "var(--cyan)", fontWeight: 700 }}>{m.userName}</span>
-                    <span style={{ fontSize: 8, opacity: 0.5 }}>• {fmt(m.created_at)}</span>
-                  </div>
-                )}
-                
-                <div className={`chat-bubble ${isMine ? "mine" : "theirs"}`} style={{
-                  padding: "10px 14px",
-                  borderRadius: "14px",
-                  fontSize: "13px",
-                  lineHeight: "1.5",
-                  background: isMine ? "linear-gradient(135deg, rgba(0,255,157,0.15), rgba(0,207,255,0.1))" : "var(--bg3)",
-                  border: isMine ? "1px solid rgba(0,255,157,0.2)" : "1px solid var(--border)",
-                  borderBottomRightRadius: isMine ? "2px" : "14px",
-                  borderBottomLeftRadius: !isMine ? "2px" : "14px",
-                  boxShadow: isMine ? "0 4px 12px rgba(0,255,157,0.05)" : "none"
-                }}>
-                  {m.text}
-                </div>
-                
-                {isMine && !isSameUser && (
-                  <div className="chat-meta" style={{ alignSelf: "flex-end", marginRight: 4, marginTop: 4, fontSize: 8, opacity: 0.5 }}>
-                    {fmt(m.created_at)}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-        <div ref={bottomRef} />
-      </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text2)" }}>
+              {messages.length} messages
+            </span>
+          </div>
+        </div>
 
-      <div className="chat-input-row" style={{ padding: "16px", background: "var(--bg2)", borderTop: "1px solid var(--border)" }}>
-        <div style={{ display: "flex", gap: 10, position: "relative" }}>
-          <textarea
-            className="chat-input"
-            rows={1}
-            placeholder="Write a message..."
-            style={{ 
-              borderRadius: "10px", 
-              paddingRight: "80px",
-              minHeight: "44px",
-              maxHeight: "120px"
-            }}
-            value={text}
-            onChange={e => {
-              setText(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = e.target.scrollHeight + "px";
-            }}
-            onKeyDown={onKey}
-          />
-          <button 
-            className="btn btn-primary" 
-            style={{ 
-              position: "absolute", 
-              right: "6px", 
-              top: "6px", 
-              bottom: "6px", 
-              borderRadius: "8px",
-              padding: "0 20px"
-            }} 
-            onClick={send} 
-            disabled={!text.trim() || sending}
-          >
-            {sending ? "..." : "Send"}
-          </button>
+        <div className="chat-messages" style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {loading ? (
+            <div className="loader">⟳ Syncing conversation...</div>
+          ) : messages.length === 0 ? (
+            <div style={{ margin: "auto", textAlign: "center", opacity: 0.5 }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>🛰️</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>No history here. Start the talk!</div>
+            </div>
+          ) : (
+            messages.map((m, idx) => {
+              const isMine = m.userId === user.id;
+              const prevMsg = messages[idx - 1];
+              const isSameUser = prevMsg && prevMsg.userId === m.userId;
+              
+              return (
+                <div key={m.id || m._id || idx} style={{ 
+                  alignSelf: isMine ? "flex-end" : "flex-start", 
+                  maxWidth: "80%", display: "flex", flexDirection: "column"
+                }}>
+                  {!isMine && !isSameUser && (
+                    <div className="chat-meta" style={{ marginLeft: 4, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: "var(--cyan)", fontWeight: 700 }}>{m.userName}</span>
+                      <span style={{ fontSize: 8, opacity: 0.5 }}>• {fmt(m.created_at)}</span>
+                    </div>
+                  )}
+                  
+                  <div className={`chat-bubble ${isMine ? "mine" : "theirs"}`} style={{
+                    padding: "10px 14px", borderRadius: "14px", fontSize: "13px", lineHeight: "1.5",
+                    background: isMine ? "linear-gradient(135deg, rgba(0,255,157,0.15), rgba(0,207,255,0.1))" : "var(--bg3)",
+                    border: isMine ? "1px solid rgba(0,255,157,0.2)" : "1px solid var(--border)",
+                    borderBottomRightRadius: isMine ? "2px" : "14px",
+                    borderBottomLeftRadius: !isMine ? "2px" : "14px",
+                    boxShadow: isMine ? "0 4px 12px rgba(0,255,157,0.05)" : "none"
+                  }}>
+                    {m.text}
+                  </div>
+                  
+                  {isMine && !isSameUser && (
+                    <div className="chat-meta" style={{ alignSelf: "flex-end", marginRight: 4, marginTop: 4, fontSize: 8, opacity: 0.5 }}>
+                      {fmt(m.created_at)}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="chat-input-row" style={{ padding: "16px", background: "rgba(0,0,0,0.1)", borderTop: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", gap: 10, position: "relative" }}>
+            <textarea
+              className="chat-input"
+              rows={1}
+              placeholder={`Message ${currentTargetName}...`}
+              style={{ borderRadius: "10px", paddingRight: "80px", minHeight: "44px", maxHeight: "120px" }}
+              value={text}
+              onChange={e => {
+                setText(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = e.target.scrollHeight + "px";
+              }}
+              onKeyDown={onKey}
+            />
+            <button className="btn btn-primary" style={{ position: "absolute", right: "6px", top: "6px", bottom: "6px", borderRadius: "8px", padding: "0 20px" }} onClick={send} disabled={!text.trim() || sending}>
+              {sending ? "..." : "Send"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ─── AI SUGGESTIONS PAGE ───────────────────────────────────────────────────────
 function AISuggestPage({ toast }) {

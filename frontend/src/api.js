@@ -60,8 +60,8 @@ export const api = {
   bulkImport:        (sponsor_id, offers) => req("POST", "/ai/bulk-import", { sponsor_id, offers }),
 
   // Chat
-  chatHistory:  (limit = 50) => req("GET",  `/chat/messages?limit=${limit}`),
-  chatSend:     (text)       => req("POST", "/chat/messages", { text }),
+  chatHistory:  (limit = 100, targetId = null) => req("GET",  `/chat/messages?limit=${limit}${targetId ? `&targetId=${targetId}` : ""}`),
+  chatSend:     (text, to = null)             => req("POST", "/chat/messages", { text, to }),
 
   // AI Suggestions
   offerSuggestions: () => req("GET", "/ai/offer-suggestions"),
