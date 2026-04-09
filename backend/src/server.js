@@ -77,6 +77,7 @@ app.use("/api/sponsors", require("./routes/sponsors"));
 app.use("/api/offers",   require("./routes/offers"));
 app.use("/api/stats",    require("./routes/stats"));
 app.use("/api/ai",       require("./routes/ai"));
+app.use("/api/chat",     require("./routes/chat"));
 
 // Debug routes (dev only)
 if (process.env.NODE_ENV !== "production") {

@@ -174,6 +174,38 @@ option{background:var(--bg3);}
 .test-fail{background:rgba(255,69,58,.08);color:var(--red);}
 .test-loading{background:rgba(0,207,255,.08);color:var(--cyan);}
 
+/* ── CHAT ────────────────────────────────────────────────────────────────────── */
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 120px);max-height:700px;}
+.chat-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
+.chat-bubble{max-width:72%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word;}
+.chat-bubble.mine{align-self:flex-end;background:rgba(0,255,157,.12);border:1px solid rgba(0,255,157,.2);border-bottom-right-radius:3px;}
+.chat-bubble.theirs{align-self:flex-start;background:var(--bg3);border:1px solid var(--border);border-bottom-left-radius:3px;}
+.chat-meta{font-family:var(--font-mono);font-size:9px;color:var(--text2);margin-bottom:3px;}
+.chat-input-row{display:flex;gap:10px;padding:12px;border-top:1px solid var(--border);background:var(--bg2);}
+.chat-input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;resize:none;}
+.chat-input:focus{border-color:var(--green);}
+
+/* ── AI SUGGESTIONS ──────────────────────────────────────────────────────────── */
+.suggest-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;}
+.suggest-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;}
+.suggest-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.suggest-hot::before{background:linear-gradient(90deg,var(--red),var(--orange));}
+.suggest-rising::before{background:linear-gradient(90deg,var(--cyan),var(--green));}
+.suggest-untapped::before{background:linear-gradient(90deg,var(--purple),var(--cyan));}
+.suggest-label{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;}
+.suggest-name{font-size:13px;font-weight:700;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.suggest-reason{font-size:11px;color:var(--text3);line-height:1.5;}
+.suggest-metrics{display:flex;gap:10px;margin-top:10px;font-family:var(--font-mono);font-size:10px;}
+.suggest-metric{background:var(--bg3);border-radius:5px;padding:4px 8px;color:var(--text2);}
+.suggest-metric strong{color:var(--text);}
+
+/* ── HAMBURGER / DRAWER ──────────────────────────────────────────────────────── */
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:6px;color:var(--text);font-size:20px;line-height:1;}
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;backdrop-filter:blur(2px);}
+.drawer-overlay.open{display:block;}
+.sidebar-drawer{position:fixed;left:0;top:0;bottom:0;width:260px;background:var(--bg2);border-right:1px solid var(--border);z-index:201;display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .25s ease;}
+.sidebar-drawer.open{transform:translateX(0);}
+
 /* ── MOBILE RESPONSIVE ──────────────────────────────────────────────────────── */
 @media(max-width:768px){
   /* Layout: sidebar becomes bottom nav */
@@ -184,28 +216,37 @@ option{background:var(--bg3);}
     flex-direction:row;align-items:center;
     position:fixed;bottom:0;left:0;right:0;z-index:100;
     order:2;overflow-x:auto;overflow-y:hidden;
+    background:var(--bg2);
   }
-  .main{order:1;padding-bottom:64px;}
+  .main{order:1;padding-bottom:72px;}
   .content{padding:14px 14px;}
 
-  /* Hide sidebar logo + footer on mobile */
+  /* Hide sidebar logo + footer on mobile (shown in drawer instead) */
   .logo-wrap{display:none;}
   .sidebar-foot{display:none;}
 
-  /* Nav: horizontal scrollable row */
-  .nav{display:flex;flex-direction:row;padding:0;flex:1;overflow-x:auto;}
+  /* Show hamburger */
+  .hamburger{display:flex;align-items:center;justify-content:center;}
+
+  /* Nav: horizontal bottom bar */
+  .nav{display:flex;flex-direction:row;padding:0;flex:1;overflow-x:auto;overflow-y:hidden;}
   .nav-sec{display:none;}
   .nav-item{
-    flex-direction:column;gap:3px;padding:8px 14px;
-    font-size:9px;border-left:none;border-top:2px solid transparent;
-    white-space:nowrap;min-width:60px;justify-content:center;align-items:center;
+    flex-direction:column;gap:4px;padding:10px 12px;min-width:64px;
+    font-size:10px;font-weight:600;
+    border-left:none;border-top:2px solid transparent;
+    justify-content:center;align-items:center;
+    white-space:nowrap;
   }
-  .nav-item.active{border-top-color:var(--green);border-left-color:transparent;}
-  .nav-badge{margin-left:0;margin-top:2px;}
+  .nav-item .nav-icon{font-size:20px;line-height:1;}
+  .nav-item.active{border-top-color:var(--green);border-left-color:transparent;color:var(--green);}
+  .nav-item.active .nav-icon{filter:drop-shadow(0 0 4px var(--green));}
+  .nav-badge{margin-left:0;margin-top:2px;font-size:8px;padding:1px 4px;}
 
   /* Topbar */
-  .topbar{padding:0 14px;height:48px;}
+  .topbar{padding:0 12px;height:50px;gap:10px;}
   .topbar-clock{display:none;}
+  .topbar-title{font-size:13px;}
 
   /* Stats grid: 2 columns */
   .stats-grid{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}
@@ -236,7 +277,7 @@ option{background:var(--bg3);}
   .sec-title{flex-wrap:wrap;gap:8px;}
 
   /* Toast bottom offset for nav */
-  .toast{bottom:72px;right:12px;left:12px;max-width:unset;}
+  .toast{bottom:80px;right:12px;left:12px;max-width:unset;}
 
   /* Card head wrapping */
   .card-head{flex-wrap:wrap;gap:6px;}
@@ -246,12 +287,17 @@ option{background:var(--bg3);}
     grid-template-columns:repeat(2,1fr)!important;
     gap:10px!important;
   }
+
+  /* Chat full height on mobile */
+  .chat-wrap{height:calc(100vh - 180px);}
+  .suggest-grid{grid-template-columns:1fr;}
 }
 
 @media(max-width:400px){
   .stats-grid{grid-template-columns:1fr 1fr;gap:8px;}
   .content{padding:10px 10px;}
-  .nav-item{padding:8px 10px;min-width:52px;}
+  .nav-item{padding:8px 8px;min-width:56px;}
+  .nav-item .nav-icon{font-size:18px;}
 }
 `;
 
@@ -1476,6 +1522,167 @@ async function importAllOffersFromBrowser(sponsorId, sponsorName, apiKey, toast)
   }
 }
 
+// ─── CHAT PAGE ────────────────────────────────────────────────────────────────
+function ChatPage({ user, wsRef }) {
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    api.chatHistory(80).then(r => setMessages(r.messages)).catch(() => {});
+  }, []);
+
+  // Listen for incoming WS chat messages
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws) return;
+    const handler = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "chat_message") {
+          setMessages(p => {
+            if (p.find(m => m.id === msg.msg.id)) return p;
+            return [...p, msg.msg];
+          });
+        }
+      } catch {}
+    };
+    ws.addEventListener("message", handler);
+    return () => ws.removeEventListener("message", handler);
+  }, [wsRef.current]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const send = async () => {
+    const t = text.trim();
+    if (!t || sending) return;
+    setSending(true);
+    setText("");
+    try { await api.chatSend(t); } catch {}
+    setSending(false);
+  };
+
+  const onKey = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <div className="card chat-wrap">
+      <div className="card-head">
+        <span className="card-title">Team Chat</span>
+        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>{messages.length} messages</span>
+      </div>
+      <div className="chat-messages">
+        {messages.length === 0 && (
+          <div style={{textAlign:"center",color:"var(--text2)",fontFamily:"var(--font-mono)",fontSize:11,marginTop:40}}>
+            No messages yet — say hi! 👋
+          </div>
+        )}
+        {messages.map(m => {
+          const mine = m.userId === user.id;
+          return (
+            <div key={m.id} style={{alignSelf: mine ? "flex-end" : "flex-start", maxWidth:"72%"}}>
+              {!mine && <div className="chat-meta">{m.userName} · {fmt(m.created_at)}</div>}
+              <div className={`chat-bubble ${mine ? "mine" : "theirs"}`}>{m.text}</div>
+              {mine && <div className="chat-meta" style={{textAlign:"right"}}>{fmt(m.created_at)}</div>}
+            </div>
+          );
+        })}
+        <div ref={bottomRef}/>
+      </div>
+      <div className="chat-input-row">
+        <textarea
+          className="chat-input"
+          rows={1}
+          placeholder="Type a message… (Enter to send)"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={onKey}
+        />
+        <button className="btn btn-primary" onClick={send} disabled={!text.trim() || sending}>
+          {sending ? "…" : "Send"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── AI SUGGESTIONS PAGE ───────────────────────────────────────────────────────
+function AISuggestPage({ toast }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try { setData(await api.offerSuggestions()); }
+    catch (e) { toast(e.message, "err"); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const tiers = [
+    { key: "hot",      label: "🔥 Hot — Push Now",        cls: "suggest-hot",      color: "#ff453a" },
+    { key: "rising",   label: "📈 Rising — Scale Up",      cls: "suggest-rising",   color: "#00cfff" },
+    { key: "untapped", label: "💡 Untapped Potential",      cls: "suggest-untapped", color: "#bf5af2" },
+  ];
+
+  return (
+    <>
+      <div className="sec-title" style={{marginBottom:8}}>
+        AI Offer Suggestions
+        <button className="btn btn-sm" onClick={load} disabled={loading} style={{marginLeft:"auto"}}>
+          {loading ? "⟳ Analyzing…" : "↺ Refresh"}
+        </button>
+      </div>
+      {data && (
+        <div style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text2)",marginBottom:20}}>
+          Analyzed {data.total} offers · {(data.hot?.length||0) + (data.rising?.length||0) + (data.untapped?.length||0)} suggestions
+        </div>
+      )}
+      {loading && <div className="loader">⟳ Scoring offers…</div>}
+      {!loading && data && tiers.map(({ key, label, cls, color }) => {
+        const items = data[key] || [];
+        if (!items.length) return null;
+        return (
+          <div key={key} style={{marginBottom:28}}>
+            <div style={{fontSize:13,fontWeight:800,marginBottom:4,color}}>{label}</div>
+            <div className="suggest-grid">
+              {items.map(o => (
+                <div key={o.id || o._id} className={`suggest-card ${cls}`}>
+                  <div className="suggest-label" style={{color}}>{o._tier?.toUpperCase()}</div>
+                  <div className="suggest-name" title={o.name}>{o.name}</div>
+                  <div className="suggest-reason">{o._reason}</div>
+                  <div className="suggest-metrics">
+                    <span className="suggest-metric">Leads <strong>{o._leads}</strong></span>
+                    <span className="suggest-metric">Rev <strong>${(o._revenue||0).toFixed(0)}</strong></span>
+                    <span className="suggest-metric">7d <strong>{o._recent}</strong></span>
+                    <span className="suggest-metric">Clicks <strong>{o._clicks}</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {!loading && data && (data.hot?.length + data.rising?.length + data.untapped?.length) === 0 && (
+        <div className="loader" style={{height:200,flexDirection:"column",gap:8}}>
+          <span style={{fontSize:28}}>📭</span>
+          <span>No offers with data yet — sync conversions first</span>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
 function SettingsPage({ user, toast, onLogout }) {
   const [sponsors, setSponsors] = useState([]);
@@ -1828,6 +2035,7 @@ export default function App() {
   const [liveEvents,  setLiveEvents]  = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
   const [toast,       setToastMsg]    = useState(null);
+  const [drawerOpen,  setDrawerOpen]  = useState(false);
   const wsRef = useRef(null);
 
   // URL popstate (browser back/forward)
@@ -1923,26 +2131,66 @@ export default function App() {
   );
 
   const nav = [
-    { id:"dashboard", label:"Dashboard", icon:"▦" },
+    { id:"dashboard", label:"Home",      icon:"▦" },
     { id:"sponsors",  label:"Sponsors",  icon:"⬡" },
     { id:"offers",    label:"Offers",    icon:"≡" },
-    { id:"tracking",  label:"Tracking",  icon:"◈" },
-    { id:"ai",        label:"AI Finder",  icon:"✦" },
+    { id:"tracking",  label:"Live",      icon:"◈" },
+    { id:"suggest",   label:"AI Picks",  icon:"✦" },
+    { id:"chat",      label:"Chat",      icon:"💬" },
     { id:"settings",  label:"Settings",  icon:"◎" },
   ];
-  const titles = { dashboard:"Overview Dashboard", sponsors:"Sponsor Management", offers:"Offers & IDs", tracking:"Live Tracking", ai:"AI Offer Finder", settings:"Settings & API Keys" };
+  const titles = {
+    dashboard:"Overview Dashboard", sponsors:"Sponsor Management",
+    offers:"Offers & IDs", tracking:"Live Tracking",
+    ai:"AI Offer Finder", suggest:"AI Offer Suggestions",
+    chat:"Team Chat", settings:"Settings & API Keys",
+  };
+
+  const goTo = (id) => {
+    setPage(id); setDrawerOpen(false);
+    window.history.pushState({}, "", "/" + id);
+  };
+
+  const SidebarContent = () => (
+    <>
+      <div className="logo-wrap"><div className="logo"><em>Aff</em>Intel</div><div className="logo-tag">AFFILIATE PLATFORM v3</div></div>
+      <nav className="nav">
+        <div className="nav-sec">Navigation</div>
+        {nav.map(n=>(
+          <div key={n.id} className={`nav-item${page===n.id?" active":""}`} onClick={()=>goTo(n.id)}>
+            <span style={{width:18,textAlign:"center"}}>{n.icon}</span>{n.label}
+            {n.id==="tracking" && liveEvents.length>0 && <span className="nav-badge">{liveEvents.length}</span>}
+          </div>
+        ))}
+      </nav>
+      <div className="sidebar-foot">
+        <div className="sync-row"><span className="pulse"/>{wsConnected ? "WS connected" : "WS offline"}</div>
+        <div className="user-row">
+          <div className="avatar">{user.name[0]}</div>
+          <div><div className="user-name">{user.name}</div><div className="user-role">{user.role.toUpperCase()}</div></div>
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <>
       <style>{CSS}</style>
+      {/* Mobile drawer overlay */}
+      <div className={`drawer-overlay${drawerOpen?" open":""}`} onClick={()=>setDrawerOpen(false)}/>
+      <aside className={`sidebar-drawer${drawerOpen?" open":""}`}>
+        <SidebarContent/>
+      </aside>
       <div className="app">
+        {/* Desktop sidebar */}
         <aside className="sidebar">
           <div className="logo-wrap"><div className="logo"><em>Aff</em>Intel</div><div className="logo-tag">AFFILIATE PLATFORM v3</div></div>
           <nav className="nav">
             <div className="nav-sec">Navigation</div>
             {nav.map(n=>(
-              <div key={n.id} className={`nav-item${page===n.id?" active":""}`} onClick={()=>{ setPage(n.id); window.history.pushState({}, "", "/" + n.id); }}>
-                <span style={{width:18,textAlign:"center"}}>{n.icon}</span>{n.label}
+              <div key={n.id} className={`nav-item${page===n.id?" active":""}`} onClick={()=>goTo(n.id)}>
+                <span className="nav-icon">{n.icon}</span>
+                <span>{n.label}</span>
                 {n.id==="tracking" && liveEvents.length>0 && <span className="nav-badge">{liveEvents.length}</span>}
               </div>
             ))}
@@ -1957,6 +2205,7 @@ export default function App() {
         </aside>
         <div className="main">
           <div className="topbar">
+            <button className="hamburger" onClick={()=>setDrawerOpen(p=>!p)} aria-label="Menu">☰</button>
             <div className="topbar-title">{titles[page]}</div>
             <span className={`ws-dot ${wsConnected?"ws-on":"ws-off"}`} title={wsConnected?"WebSocket live":"WebSocket offline"}/>
             <div className="topbar-clock">{time.toLocaleDateString()} · {time.toLocaleTimeString()}</div>
@@ -1995,7 +2244,9 @@ export default function App() {
             {page==="offers"    && <OffersPage    toast={showToast}/>}
             {page==="tracking"  && <TrackingPage  liveEvents={liveEvents} wsConnected={wsConnected}/>}
             {page==="ai"        && <AIPage        toast={showToast}/>}
-        {page==="settings"  && <SettingsPage  user={user} toast={showToast} onLogout={logout}/>}
+            {page==="suggest"   && <AISuggestPage toast={showToast}/>}
+            {page==="chat"      && <ChatPage      user={user} wsRef={wsRef}/>}
+            {page==="settings"  && <SettingsPage  user={user} toast={showToast} onLogout={logout}/>}
           </div>
         </div>
       </div>

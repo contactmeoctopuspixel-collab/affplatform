@@ -59,6 +59,13 @@ export const api = {
   syncOffers:        ()          => req("POST", "/ai/sync-offers"),
   bulkImport:        (sponsor_id, offers) => req("POST", "/ai/bulk-import", { sponsor_id, offers }),
 
+  // Chat
+  chatHistory:  (limit = 50) => req("GET",  `/chat/messages?limit=${limit}`),
+  chatSend:     (text)       => req("POST", "/chat/messages", { text }),
+
+  // AI Suggestions
+  offerSuggestions: () => req("GET", "/ai/offer-suggestions"),
+
   // Health
   health: () => req("GET", "/health"),
 };

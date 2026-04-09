@@ -47,6 +47,67 @@ router.post("/sync-offers", requireEditor, async (req, res) => {
   } catch (e) { console.error("sync-offers background error:", e.message); }
 });
 
+// GET /api/ai/offer-suggestions — score & rank offers by performance data
+router.get("/offer-suggestions", async (req, res) => {
+  try {
+    const now      = Date.now();
+    const day7ago  = new Date(now - 7  * 86400000).toISOString();
+    const day30ago = new Date(now - 30 * 86400000).toISOString();
+
+    const [offers, conversions] = await Promise.all([
+      db.offers.find({ status: { $ne: "expired" } }),
+      db.conversions.find({ created_at: { $gte: day30ago } }),
+    ]);
+
+    // Aggregate conversions per offer_id
+    const convMap = {};
+    for (const cv of conversions) {
+      const oid = String(cv.offer_id || "");
+      if (!oid) continue;
+      if (!convMap[oid]) convMap[oid] = { leads: 0, revenue: 0, recent: 0 };
+      convMap[oid].leads++;
+      convMap[oid].revenue += parseFloat(cv.revenue || 0);
+      if (cv.created_at >= day7ago) convMap[oid].recent++;
+    }
+
+    // Score each offer
+    const scored = offers.map(o => {
+      const extId = String(o.external_id || o.id || "");
+      const cv    = convMap[extId] || { leads: 0, revenue: 0, recent: 0 };
+      const clicks   = o.clicks || 0;
+      const leads    = cv.leads;
+      const revenue  = cv.revenue;
+      const recent   = cv.recent;
+      const cvr      = clicks > 0 ? (leads / clicks) * 100 : 0;
+
+      // Weighted score
+      const score = (leads * 12) + (revenue * 1.5) + (recent * 20) + (cvr * 5) + (clicks * 0.1);
+
+      let tier = "cold";
+      if (recent >= 3 || score >= 150) tier = "hot";
+      else if (recent >= 1 || score >= 50) tier = "rising";
+      else if (o.tracking_url && leads === 0 && clicks > 0) tier = "untapped";
+
+      let reason = "";
+      if (tier === "hot")     reason = `${recent} leads last 7d · $${revenue.toFixed(0)} rev · ${cvr.toFixed(1)}% CVR`;
+      if (tier === "rising")  reason = `${leads} leads · $${revenue.toFixed(0)} rev · growing`;
+      if (tier === "untapped")reason = `${clicks} clicks, no conversions yet — try different mailer`;
+      if (tier === "cold")    reason = leads > 0 ? `${leads} leads total, no recent activity` : "no activity";
+
+      return { ...o, _score: score, _tier: tier, _reason: reason, _leads: leads, _revenue: revenue, _recent: recent, _clicks: clicks };
+    });
+
+    // Sort by score desc
+    scored.sort((a, b) => b._score - a._score);
+
+    const hot      = scored.filter(o => o._tier === "hot").slice(0, 8);
+    const rising   = scored.filter(o => o._tier === "rising").slice(0, 8);
+    const untapped = scored.filter(o => o._tier === "untapped").slice(0, 6);
+
+    res.json({ hot, rising, untapped, total: offers.length, scored: scored.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/ai/cleanup-offers — remove offers not seen in latest import
 router.post("/cleanup-offers", requireEditor, async (req, res) => {
   try {

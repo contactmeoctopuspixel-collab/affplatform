@@ -19,6 +19,7 @@ const db = {
   events:      Datastore.create(opts("events.db")),
   daily_stats: Datastore.create(opts("daily_stats.db")),
   conversions: Datastore.create(opts("conversions.db")),
+  chat:        Datastore.create(opts("chat.db")),
 };
 
 // Stop auto-compaction to prevent EBUSY lock errors when multiple processes start
