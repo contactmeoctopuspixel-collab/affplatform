@@ -1,19 +1,35 @@
+// Debug: show ALL keys in a raw conversion record to find offer_id field name
+require('dotenv').config({path:'./.env'});
 const db = require('./src/db');
-Promise.all([
-  db.conversions.find({}).limit(5),
-  db.offers.find({}).limit(5),
-  db.conversions.find({}),
-  db.offers.find({})
-]).then(function(r) {
-  var convS = r[0], offerS = r[1], allConvs = r[2], allOffers = r[3];
-  var convIds = allConvs.map(function(c){ return c.offer_id; }).filter(Boolean);
-  var extIds  = allOffers.map(function(o){ return o.external_id; }).filter(Boolean);
-  var matched = convIds.filter(function(id){ return extIds.indexOf(id) !== -1; });
-  console.log('CONV samples:', JSON.stringify(convS.map(function(c){ return {offer_id:c.offer_id,rev:c.revenue,date:c.created_at&&c.created_at.slice(0,10)}; })));
-  console.log('OFFER samples:', JSON.stringify(offerS.map(function(o){ return {ext_id:o.external_id,name:o.name&&o.name.slice(0,30)}; })));
-  console.log('Total convs:', allConvs.length, '| offers:', allOffers.length);
-  console.log('Matched:', matched.length);
-  console.log('Sample matched:', matched.slice(0,5));
-  console.log('Unmatched conv ids (first 5):', convIds.filter(function(id){ return extIds.indexOf(id) === -1; }).slice(0,5));
+const fetch = require('node-fetch');
+
+async function run() {
+  // 1. Show full raw conversion record from DB
+  const conv = await db.conversions.findOne({});
+  console.log('--- FULL DB CONVERSION RECORD ---');
+  console.log(JSON.stringify(conv, null, 2));
+
+  // 2. Fetch a live sample from Everflow to see raw field names
+  const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: '' } });
+  const sp = sponsors[0];
+  if (!sp) { console.log('No sponsor with API key'); process.exit(0); }
+
+  const today = new Date().toISOString().slice(0,10);
+  const from  = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+  const res = await fetch(
+    'https://api.eflow.team/v1/affiliates/reporting/conversions?page=1&page_size=2&order_field=conversion_unix_timestamp&order_direction=desc',
+    {
+      method: 'POST',
+      headers: { 'X-Eflow-API-Key': sp.api_key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: today, timezone_id: 55, show_conversions: true, show_events: false, query: { filters: [], search_terms: [] } })
+    }
+  );
+  const data = await res.json();
+  const rows = data.conversions || data.data || data.rows || [];
+  console.log('--- RAW EVERFLOW ROW KEYS ---');
+  if (rows[0]) console.log(JSON.stringify(Object.keys(rows[0])));
+  console.log('--- FIRST RAW ROW ---');
+  if (rows[0]) console.log(JSON.stringify(rows[0], null, 2));
   process.exit(0);
-});
+}
+run().catch(function(e){ console.error(e.message); process.exit(1); });
