@@ -1734,8 +1734,9 @@ function ChatPage({ user, wsRef }) {
               return (
                 <div key={m.id || m._id || idx} style={{ 
                   alignSelf: isMine ? "flex-end" : "flex-start", 
-                  maxWidth: "80%", display: "flex", flexDirection: "column",
-                  alignItems: isMine ? "flex-end" : "flex-start"
+                  maxWidth: "90%", display: "flex", flexDirection: "column",
+                  alignItems: isMine ? "flex-end" : "flex-start",
+                  marginBottom: 8
                 }}>
                   {!isMine && !isSameUser && (
                     <div className="chat-meta" style={{ marginLeft: 4, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
@@ -1745,12 +1746,13 @@ function ChatPage({ user, wsRef }) {
                   )}
                   
                   <div className={`chat-bubble ${isMine ? "mine" : "theirs"}`} style={{
-                    padding: "10px 14px", borderRadius: "14px", fontSize: "13px", lineHeight: "1.5",
+                    padding: "12px 18px", borderRadius: "14px", fontSize: "14px", lineHeight: "1.5",
                     background: isMine ? "linear-gradient(135deg, rgba(0,255,157,0.15), rgba(0,207,255,0.1))" : "var(--bg3)",
                     border: isMine ? "1px solid rgba(0,255,157,0.2)" : "1px solid var(--border)",
                     borderBottomRightRadius: isMine ? "2px" : "14px",
                     borderBottomLeftRadius: !isMine ? "2px" : "14px",
-                    boxShadow: isMine ? "0 4px 12px rgba(0,255,157,0.05)" : "none"
+                    boxShadow: isMine ? "0 4px 12px rgba(0,255,157,0.05)" : "none",
+                    minWidth: "120px"
                   }}>
                     {m.text}
                   </div>
