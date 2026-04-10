@@ -1562,20 +1562,28 @@ async function importAllOffersFromBrowser(sponsorId, sponsorName, apiKey, toast)
 }
 
 // ─── CHAT PAGE ────────────────────────────────────────────────────────────────
-function ChatPage({ user, wsRef }) {
+function ChatPage({ user, wsRef, initialTarget, onTargetUsed }) {
   const [messages,  setMessages]  = useState([]);
   const [text,      setText]      = useState("");
   const [sending,   setSending]   = useState(false);
   const [loading,   setLoading]   = useState(true);
-  const [targetId,  setTargetId]  = useState("global");
+  const [targetId,  setTargetId]  = useState(initialTarget || "global");
   const [users,     setUsers]     = useState([]);
-  const [typingMap, setTypingMap] = useState({}); // { userId: userName }
-  const [unread,    setUnread]    = useState({}); // { contactId: count }
-  const [notif,     setNotif]     = useState(null); // in-page notification banner
+  const [typingMap, setTypingMap] = useState({});
+  const [unread,    setUnread]    = useState({});
+  const [notif,     setNotif]     = useState(null);
   const bottomRef    = useRef(null);
   const typingTimer  = useRef({});
-  const targetIdRef  = useRef(targetId); // always-current ref for use in closures
+  const targetIdRef  = useRef(initialTarget || "global");
   useEffect(() => { targetIdRef.current = targetId; }, [targetId]);
+
+  // If a new initialTarget arrives (from notification click), navigate to it
+  useEffect(() => {
+    if (initialTarget) {
+      setTargetId(initialTarget);
+      onTargetUsed?.();
+    }
+  }, [initialTarget]);
 
   // ── Load history ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -2325,6 +2333,8 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
   const [toast,       setToastMsg]    = useState(null);
   const [drawerOpen,  setDrawerOpen]  = useState(false);
+  const [popNotifs,   setPopNotifs]   = useState([]); // clickable popup notifications
+  const [chatTarget,  setChatTarget]  = useState(null); // open specific chat on nav
   const wsRef = useRef(null);
 
   // URL popstate (browser back/forward)
@@ -2386,14 +2396,38 @@ export default function App() {
         window.dispatchEvent(new CustomEvent("affplatform_ws", { detail: msg }));
       }
 
-      // 5. Notification for private messages
+      // 5. Popup notification for messages
       if (msg.type === "chat_message" && msg.msg && msg.msg.userId !== user.id) {
         const m = msg.msg;
-        const isPrivate = !!m.to;
-        if (isPrivate && m.to === user.id) {
-          if (page !== "chat") showToast(`📩 Message from ${m.userName}`, "ok");
-          sendNotification(`📩 ${m.userName}`, m.text);
-        }
+        const notifId = Date.now();
+        const popItem = {
+          id: notifId,
+          kind: "msg",
+          title: `📩 ${m.userName}`,
+          body: m.text,
+          contactKey: m.to ? m.userId : "global",
+          time: new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}),
+        };
+        setPopNotifs(p => [popItem, ...p].slice(0, 5));
+        setTimeout(() => setPopNotifs(p => p.filter(x => x.id !== notifId)), 6000);
+        sendNotification(popItem.title, m.text);
+      }
+
+      // 6. Popup notification for leads
+      if (msg.type === "new_lead") {
+        const notifId = Date.now();
+        const isMailer = !!msg.mailerName;
+        const popItem = {
+          id: notifId,
+          kind: "lead",
+          title: `💰 New Lead!`,
+          body: isMailer
+            ? `Mailer: ${msg.mailerName} · ID: ${msg.mailerId} · +$${Number(msg.revenue||0).toFixed(2)}`
+            : `${msg.sponsorName || ""} · +$${Number(msg.revenue||0).toFixed(2)}`,
+          time: new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}),
+        };
+        setPopNotifs(p => [popItem, ...p].slice(0, 5));
+        setTimeout(() => setPopNotifs(p => p.filter(x => x.id !== notifId)), 8000);
       }
 
       if (msg.type === "offers_synced") {
@@ -2528,12 +2562,46 @@ export default function App() {
             {page==="tracking"  && <TrackingPage  liveEvents={liveEvents} wsConnected={wsConnected}/>}
             {page==="ai"        && <AIPage        toast={showToast}/>}
             {page==="suggest"   && <AISuggestPage toast={showToast}/>}
-            {page==="chat"      && <ChatPage      user={user} wsRef={wsRef}/>}
+            {page==="chat"      && <ChatPage      user={user} wsRef={wsRef} initialTarget={chatTarget} onTargetUsed={()=>setChatTarget(null)}/>}
             {page==="settings"  && <SettingsPage  user={user} toast={showToast} onLogout={logout}/>}
           </div>
         </div>
       </div>
       {toast && <Toast key={toast.key} msg={toast.msg} type={toast.type} onClose={()=>setToastMsg(null)}/>}
+
+      {/* ── GLOBAL POPUP NOTIFICATIONS ────────────────────────────────── */}
+      <div style={{position:"fixed",top:70,right:20,zIndex:9999,display:"flex",flexDirection:"column",gap:10,pointerEvents:"none"}}>
+        {popNotifs.map(n => (
+          <div key={n.id}
+            onClick={() => {
+              if (n.kind === "msg") {
+                setChatTarget(n.contactKey);
+                setPage("chat");
+                window.history.pushState({}, "", "/chat");
+              }
+              setPopNotifs(p => p.filter(x => x.id !== n.id));
+            }}
+            style={{
+              pointerEvents:"all", cursor: n.kind==="msg" ? "pointer" : "default",
+              background: n.kind==="msg"
+                ? "linear-gradient(135deg,rgba(0,255,157,0.12),rgba(0,207,255,0.08))"
+                : "linear-gradient(135deg,rgba(255,159,10,0.14),rgba(255,69,58,0.08))",
+              border: `1px solid ${n.kind==="msg" ? "rgba(0,255,157,0.35)" : "rgba(255,159,10,0.4)"}`,
+              borderRadius:14, padding:"14px 18px", minWidth:280, maxWidth:360,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.45)", backdropFilter:"blur(12px)",
+              animation:"slideIn .3s ease",
+            }}
+          >
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+              <div style={{fontWeight:700,fontSize:13,color: n.kind==="msg" ? "var(--green)" : "var(--orange)"}}>{n.title}</div>
+              <div style={{fontSize:10,color:"var(--text2)",marginLeft:12,flexShrink:0}}>{n.time}</div>
+            </div>
+            <div style={{fontSize:12,color:"var(--text)",lineHeight:1.5,wordBreak:"break-word"}}>{n.body}</div>
+            {n.kind==="msg" && <div style={{fontSize:10,color:"var(--text2)",marginTop:6,fontStyle:"italic"}}>Click to open chat →</div>}
+            <div onClick={e=>{e.stopPropagation();setPopNotifs(p=>p.filter(x=>x.id!==n.id));}} style={{position:"absolute",top:8,right:10,cursor:"pointer",opacity:0.5,fontSize:12}}>✕</div>
+          </div>
+        ))}
+      </div>
     </>
   );
 }
