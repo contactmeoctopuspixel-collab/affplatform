@@ -2381,18 +2381,18 @@ export default function App() {
         sendNotification(notif.title, notif.body, notif.color);
       }
 
-      // 4. Chat messages (New logic)
-      if (msg.type === "chat_message") {
+      // 4. Chat + Typing — dispatch to ChatPage
+      if (msg.type === "chat_message" || msg.type === "typing") {
         window.dispatchEvent(new CustomEvent("affplatform_ws", { detail: msg }));
-        if (msg.msg && msg.msg.userId !== user.id) {
-          const m = msg.msg;
-          const isPrivate = !!m.to;
-          if (isPrivate && m.to === user.id) {
-            if (page !== "chat") showToast(`📩 Message from ${m.userName}`, "ok");
-            sendNotification(`📩 ${m.userName}`, m.text);
-          } else if (!isPrivate && page !== "chat") {
-            // Optional: notifications for global chat
-          }
+      }
+
+      // 5. Notification for private messages
+      if (msg.type === "chat_message" && msg.msg && msg.msg.userId !== user.id) {
+        const m = msg.msg;
+        const isPrivate = !!m.to;
+        if (isPrivate && m.to === user.id) {
+          if (page !== "chat") showToast(`📩 Message from ${m.userName}`, "ok");
+          sendNotification(`📩 ${m.userName}`, m.text);
         }
       }
 
