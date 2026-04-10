@@ -1610,6 +1610,9 @@ function ChatPage({ user, wsRef, initialTarget, onTargetUsed }) {
       // ① New chat message
       if (msg.type === "chat_message" && msg.msg) {
         const m = msg.msg;
+        // Strict privacy: if message is private and not meant for me (and I'm not the sender), ignore completely.
+        if (m.to && m.to !== user.id && m.userId !== user.id) return;
+
         const cur = targetIdRef.current;
         const isGlobal   = !m.to;
         const inGlobal   = cur === "global" && isGlobal;
@@ -1620,13 +1623,11 @@ function ChatPage({ user, wsRef, initialTarget, onTargetUsed }) {
 
         if (inGlobal || inPrivate) {
           setMessages(p => {
-            // Skip if already present (deduplicate by id OR _id)
             if (p.find(x => (x.id && x.id === m.id) || (x._id && x._id === m._id))) return p;
             return [...p, m];
           });
           setTypingMap(p => { const n = {...p}; delete n[m.userId]; return n; });
         } else if (m.userId !== user.id) {
-          // Message is in a different conversation — show badge + banner
           const contactKey = m.to ? m.userId : "global";
           setUnread(p => ({ ...p, [contactKey]: (p[contactKey] || 0) + 1 }));
           setNotif({ name: m.userName, text: m.text, contactKey });
@@ -1637,8 +1638,11 @@ function ChatPage({ user, wsRef, initialTarget, onTargetUsed }) {
       // ② Typing indicator
       if (msg.type === "typing" && msg.userId !== user.id) {
         const cur = targetIdRef.current;
+        // Ignore private typing if it's meant for someone else
+        if (msg.to && msg.to !== user.id) return;
+
         const relevant = msg.to
-          ? (cur === msg.userId || cur === "global")
+          ? (cur === msg.userId)
           : cur === "global";
         if (relevant) {
           setTypingMap(p => ({ ...p, [msg.userId]: msg.userName }));
@@ -2399,6 +2403,9 @@ export default function App() {
       // 5. Popup notification for messages
       if (msg.type === "chat_message" && msg.msg && msg.msg.userId !== user.id) {
         const m = msg.msg;
+        // Skip if this is a private message meant for someone else
+        if (m.to && m.to !== user.id) return;
+
         const notifId = Date.now();
         const popItem = {
           id: notifId,
