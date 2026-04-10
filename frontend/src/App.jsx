@@ -1611,8 +1611,11 @@ function ChatPage({ user, wsRef }) {
         );
 
         if (inGlobal || inPrivate) {
-          setMessages(p => p.find(x => x.id === m.id || x._id === m._id) ? p : [...p, m]);
-          // Clear typing for this sender
+          setMessages(p => {
+            // Skip if already present (deduplicate by id OR _id)
+            if (p.find(x => (x.id && x.id === m.id) || (x._id && x._id === m._id))) return p;
+            return [...p, m];
+          });
           setTypingMap(p => { const n = {...p}; delete n[m.userId]; return n; });
         } else if (m.userId !== user.id) {
           // Message is in a different conversation — show badge + banner
@@ -1668,8 +1671,9 @@ function ChatPage({ user, wsRef }) {
     const t = text.trim();
     if (!t || sending) return;
     setSending(true);
+    const tempId = Date.now() + "-temp";
     const tempMsg = {
-      id: Date.now() + "-temp",
+      id: tempId,
       userId: user.id,
       userName: user.name,
       text: t,
@@ -1679,11 +1683,15 @@ function ChatPage({ user, wsRef }) {
     setMessages(prev => [...prev, tempMsg]);
     setText("");
     try {
-      await api.chatSend(t, targetId === "global" ? null : targetId);
+      const res = await api.chatSend(t, targetId === "global" ? null : targetId);
+      // Replace temp message with real server message
+      if (res?.msg) {
+        setMessages(prev => prev.map(m => m.id === tempId ? res.msg : m));
+      }
     } catch (e) {
       alert("Failed to send: " + e.message);
       setText(t);
-      setMessages(prev => prev.filter(m => m.id !== tempMsg.id));
+      setMessages(prev => prev.filter(m => m.id !== tempId));
     } finally { setSending(false); }
   };
 
