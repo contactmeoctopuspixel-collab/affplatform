@@ -38,8 +38,8 @@ router.post("/users", authMiddleware, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/auth/users (admin only)
-router.get("/users", authMiddleware, requireAdmin, async (req, res) => {
+// GET /api/auth/users (for contact list in chat)
+router.get("/users", authMiddleware, async (req, res) => {
   try {
     const users = await db.users.find({});
     res.json({ users: users.map(u => ({ id: u.id, email: u.email, name: u.name, role: u.role, created_at: u.created_at, last_login: u.last_login })) });
