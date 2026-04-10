@@ -16,12 +16,28 @@ const PORT   = process.env.PORT || 4000;
 const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL_MINUTES) || 2;
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
-const wss = new WebSocketServer({ server, path: "/api/ws" });
+const wss = new WebSocketServer({ server, path: "/ws" });
 app.set("wss", wss);
 
 wss.on("connection", (ws) => {
   console.log(`🔌 WS client connected (${wss.clients.size} total)`);
   ws.send(JSON.stringify({ type: "connected", message: "AffIntel WS ready" }));
+
+  // Handle incoming client messages (e.g. typing indicators)
+  ws.on("message", (data) => {
+    try {
+      const msg = JSON.parse(data);
+      // Broadcast typing events to all OTHER clients
+      if (msg.type === "typing") {
+        wss.clients.forEach(c => {
+          if (c !== ws && c.readyState === 1) {
+            c.send(JSON.stringify(msg));
+          }
+        });
+      }
+    } catch (e) {}
+  });
+
   ws.on("close", () => console.log(`🔌 WS disconnected (${wss.clients.size} remaining)`));
   ws.on("error", (e) => console.error("WS error:", e.message));
 });

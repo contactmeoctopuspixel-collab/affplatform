@@ -1562,95 +1562,129 @@ async function importAllOffersFromBrowser(sponsorId, sponsorName, apiKey, toast)
 }
 
 // ─── CHAT PAGE ────────────────────────────────────────────────────────────────
-// ─── CHAT PAGE ────────────────────────────────────────────────────────────────
 function ChatPage({ user, wsRef }) {
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [targetId, setTargetId] = useState("global"); // "global" or userId
-  const [users, setUsers] = useState([]);
-  const bottomRef = useRef(null);
+  const [messages,  setMessages]  = useState([]);
+  const [text,      setText]      = useState("");
+  const [sending,   setSending]   = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [targetId,  setTargetId]  = useState("global");
+  const [users,     setUsers]     = useState([]);
+  const [typingMap, setTypingMap] = useState({}); // { userId: userName }
+  const [unread,    setUnread]    = useState({}); // { contactId: count }
+  const [notif,     setNotif]     = useState(null); // in-page notification banner
+  const bottomRef    = useRef(null);
+  const typingTimer  = useRef({});
+  const targetIdRef  = useRef(targetId); // always-current ref for use in closures
+  useEffect(() => { targetIdRef.current = targetId; }, [targetId]);
 
+  // ── Load history ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch users for the contact list
-      const uRes = await api.getUsers();
-      if (uRes && uRes.users) {
-        setUsers(uRes.users.filter(u => u.id !== user.id)); // All except me
-      }
-      // 2. Fetch history for current target
-      const r = await api.chatHistory(100, targetId);
-      if (r && Array.isArray(r.messages)) {
-        setMessages(r.messages);
-      }
-    } catch (e) {
-      console.error("Chat load error:", e);
-    } finally {
-      setLoading(false);
-    }
+      const [uRes, r] = await Promise.all([
+        api.getUsers(),
+        api.chatHistory(100, targetId),
+      ]);
+      if (uRes?.users) setUsers(uRes.users.filter(u => u.id !== user.id));
+      if (r?.messages) setMessages(r.messages);
+    } catch (e) { console.error("Chat load error:", e); }
+    finally { setLoading(false); }
   }, [targetId, user.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Listen for real-time WebSocket messages
+  // ── WebSocket listener ────────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e) => {
       const msg = e.detail;
-      if (msg && msg.type === "chat_message" && msg.msg) {
+      if (!msg) return;
+
+      // ① New chat message
+      if (msg.type === "chat_message" && msg.msg) {
         const m = msg.msg;
-        // Logic to decide if we show this message in current view
-        const isGlobalView = targetId === "global";
-        const isMsgGlobal = !m.to;
-        const belongsInGlobal = isGlobalView && isMsgGlobal;
-        const belongsInPrivate = !isGlobalView && (
-          (m.userId === targetId && m.to === user.id) || // from them to me
-          (m.userId === user.id && m.to === targetId)    // from me to them
+        const cur = targetIdRef.current;
+        const isGlobal   = !m.to;
+        const inGlobal   = cur === "global" && isGlobal;
+        const inPrivate  = cur !== "global" && (
+          (m.userId === cur      && m.to === user.id) ||
+          (m.userId === user.id  && m.to === cur)
         );
 
-        if (belongsInGlobal || belongsInPrivate) {
-          setMessages(p => {
-            if (p.find(old => old.id === m.id || old._id === m._id)) return p;
-            return [...p, m];
-          });
+        if (inGlobal || inPrivate) {
+          setMessages(p => p.find(x => x.id === m.id || x._id === m._id) ? p : [...p, m]);
+          // Clear typing for this sender
+          setTypingMap(p => { const n = {...p}; delete n[m.userId]; return n; });
+        } else if (m.userId !== user.id) {
+          // Message is in a different conversation — show badge + banner
+          const contactKey = m.to ? m.userId : "global";
+          setUnread(p => ({ ...p, [contactKey]: (p[contactKey] || 0) + 1 }));
+          setNotif({ name: m.userName, text: m.text, contactKey });
+          setTimeout(() => setNotif(null), 4000);
+        }
+      }
+
+      // ② Typing indicator
+      if (msg.type === "typing" && msg.userId !== user.id) {
+        const cur = targetIdRef.current;
+        const relevant = msg.to
+          ? (cur === msg.userId || cur === "global")
+          : cur === "global";
+        if (relevant) {
+          setTypingMap(p => ({ ...p, [msg.userId]: msg.userName }));
+          clearTimeout(typingTimer.current[msg.userId]);
+          typingTimer.current[msg.userId] = setTimeout(() => {
+            setTypingMap(p => { const n = {...p}; delete n[msg.userId]; return n; });
+          }, 3000);
         }
       }
     };
     window.addEventListener("affplatform_ws", handler);
     return () => window.removeEventListener("affplatform_ws", handler);
-  }, [targetId, user.id]);
+  }, [user.id]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  // ── Send typing event ─────────────────────────────────────────────────────────
+  const typingSentAt = useRef(0);
+  const handleTextChange = (e) => {
+    setText(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = e.target.scrollHeight + "px";
+    // Throttle: send at most 1 typing event per 2s
+    const now = Date.now();
+    if (now - typingSentAt.current > 2000) {
+      typingSentAt.current = now;
+      wsRef.current?.send({
+        type: "typing",
+        userId: user.id,
+        userName: user.name,
+        to: targetId === "global" ? null : targetId,
+      });
+    }
+  };
+
+  // ── Send message ──────────────────────────────────────────────────────────────
   const send = async () => {
     const t = text.trim();
     if (!t || sending) return;
     setSending(true);
-    
-    // Optimistic UI update: add message instantly so user sees it
     const tempMsg = {
       id: Date.now() + "-temp",
       userId: user.id,
       userName: user.name,
       text: t,
       created_at: new Date().toISOString(),
-      to: targetId === "global" ? null : targetId
+      to: targetId === "global" ? null : targetId,
     };
     setMessages(prev => [...prev, tempMsg]);
     setText("");
-
     try {
       await api.chatSend(t, targetId === "global" ? null : targetId);
     } catch (e) {
       alert("Failed to send: " + e.message);
       setText(t);
-      setMessages(prev => prev.filter(m => m.id !== tempMsg.id)); // remove if failed
-    } finally {
-      setSending(false);
-    }
+      setMessages(prev => prev.filter(m => m.id !== tempMsg.id));
+    } finally { setSending(false); }
   };
 
   const onKey = (e) => {
@@ -1659,133 +1693,160 @@ function ChatPage({ user, wsRef }) {
 
   const fmt = (iso) => {
     if (!iso) return "";
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  const currentTargetName = targetId === "global" ? "Team Global" : (users.find(u => u.id === targetId)?.name || "User");
+  const currentTargetName = targetId === "global" ? "Global Team" : (users.find(u => u.id === targetId)?.name || "User");
+  const typingNames = Object.values(typingMap);
+
+  const goTo = (id) => {
+    setTargetId(id);
+    setUnread(p => ({ ...p, [id]: 0 }));
+  };
 
   return (
-    <div className="card chat-layout" style={{ height: "calc(100vh - 120px)", display: "flex", overflow: "hidden" }}>
-      
-      {/* ── LEFT: CONTACT LIST ── */}
-      <div style={{ width: 220, background: "rgba(0,0,0,0.15)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "16px 20px", fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5 }}>Channels</div>
-        <div 
-          onClick={() => setTargetId("global")}
-          style={{ 
-            padding: "10px 20px", cursor: "pointer", fontSize: 13, 
-            background: targetId === "global" ? "rgba(0,255,157,0.1)" : "transparent",
-            color: targetId === "global" ? "var(--green)" : "var(--text)",
-            borderLeft: targetId === "global" ? "3px solid var(--green)" : "3px solid transparent",
-            fontWeight: targetId === "global" ? 700 : 400
-          }}
-        >🌍 Global Team</div>
+    <div style={{ height: "calc(100vh - 120px)", display: "flex", overflow: "hidden", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}>
+
+      {/* ── NOTIFICATION BANNER ──────────────────────────────────────────────── */}
+      {notif && (
+        <div onClick={() => { goTo(notif.contactKey); setNotif(null); }} style={{
+          position: "absolute", top: 70, right: 20, zIndex: 999,
+          background: "linear-gradient(135deg, rgba(0,255,157,0.12), rgba(0,207,255,0.08))",
+          border: "1px solid rgba(0,255,157,0.3)", borderRadius: 12,
+          padding: "12px 18px", minWidth: 260, maxWidth: 340, cursor: "pointer",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4)", backdropFilter: "blur(10px)",
+          animation: "slideIn .3s ease"
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--green)", marginBottom: 4 }}>
+            📩 {notif.name}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {notif.text}
+          </div>
+        </div>
+      )}
+
+      {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────────── */}
+      <div style={{ width: 230, background: "var(--bg2)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        <div style={{ padding: "16px 20px 8px", fontSize: 10, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 1 }}>Channels</div>
         
-        <div style={{ padding: "20px 20px 8px", fontSize: 11, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 0.5 }}>Private Messages</div>
+        {/* Global Team */}
+        <div onClick={() => goTo("global")} style={{
+          padding: "11px 20px", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: targetId === "global" ? "rgba(0,255,157,0.08)" : "transparent",
+          color: targetId === "global" ? "var(--green)" : "var(--text)",
+          borderLeft: targetId === "global" ? "3px solid var(--green)" : "3px solid transparent",
+          fontWeight: targetId === "global" ? 700 : 400,
+        }}>
+          <span>🌍 Global Team</span>
+          {(unread["global"] || 0) > 0 && <span style={{ background: "var(--green)", color: "var(--bg)", borderRadius: 10, fontSize: 9, fontWeight: 700, padding: "2px 6px" }}>{unread["global"]}</span>}
+        </div>
+
+        <div style={{ padding: "14px 20px 6px", fontSize: 10, fontWeight: 700, color: "var(--text2)", textTransform: "uppercase", letterSpacing: 1 }}>Direct Messages</div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {users.map(u => (
-            <div 
-              key={u.id}
-              onClick={() => setTargetId(u.id)}
-              style={{ 
-                padding: "10px 20px", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 8,
-                background: targetId === u.id ? "rgba(0,255,157,0.1)" : "transparent",
-                color: targetId === u.id ? "var(--green)" : "var(--text)",
-                borderLeft: targetId === u.id ? "3px solid var(--green)" : "3px solid transparent"
-              }}
-            >
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--text3)", opacity: 0.4 }} />
-              {u.name}
+            <div key={u.id} onClick={() => goTo(u.id)} style={{
+              padding: "11px 20px", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "space-between",
+              background: targetId === u.id ? "rgba(0,255,157,0.08)" : "transparent",
+              color: targetId === u.id ? "var(--green)" : "var(--text)",
+              borderLeft: targetId === u.id ? "3px solid var(--green)" : "3px solid transparent",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,var(--green),var(--cyan))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "var(--bg)", flexShrink: 0 }}>
+                  {u.name[0]}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>{u.name}</div>
+                  {typingMap[u.id] && <div style={{ fontSize: 10, color: "var(--green)", fontStyle: "italic" }}>typing...</div>}
+                </div>
+              </div>
+              {(unread[u.id] || 0) > 0 && <span style={{ background: "var(--green)", color: "var(--bg)", borderRadius: 10, fontSize: 9, fontWeight: 700, padding: "2px 6px", flexShrink: 0 }}>{unread[u.id]}</span>}
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── RIGHT: MESSAGES ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--bg1)" }}>
-        
-        <div className="card-head" style={{ borderBottom: "1px solid var(--border2)", background: "rgba(255,255,255,0.02)" }}>
+      {/* ── MAIN CHAT AREA ───────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+
+        {/* Header */}
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg2)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 16 }}>{targetId === "global" ? "🌍" : "👤"}</span>
-            <span className="card-title" style={{ fontSize: 13 }}>{currentTargetName}</span>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,var(--green),var(--cyan))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "var(--bg)" }}>
+              {targetId === "global" ? "🌍" : currentTargetName[0]}
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{currentTargetName}</div>
+              {typingNames.length > 0 && (
+                <div style={{ fontSize: 11, color: "var(--green)", fontStyle: "italic" }}>
+                  {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"} typing...
+                </div>
+              )}
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text2)" }}>
-              {messages.length} messages
-            </span>
-          </div>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text2)" }}>{messages.length} msgs</span>
         </div>
 
-        <div className="chat-messages" style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 4 }}>
           {loading ? (
-            <div className="loader">⟳ Syncing conversation...</div>
+            <div style={{ margin: "auto", opacity: 0.5 }}>⟳ Loading…</div>
           ) : messages.length === 0 ? (
-            <div style={{ margin: "auto", textAlign: "center", opacity: 0.5 }}>
-              <div style={{ fontSize: 40, marginBottom: 10 }}>🛰️</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>No history here. Start the talk!</div>
+            <div style={{ margin: "auto", textAlign: "center", opacity: 0.4 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>🛰️</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>Start the conversation</div>
             </div>
-          ) : (
-            messages.map((m, idx) => {
-              const isMine = m.userId === user.id;
-              const prevMsg = messages[idx - 1];
-              const isSameUser = prevMsg && prevMsg.userId === m.userId;
-              
-              return (
-                <div key={m.id || m._id || idx} style={{ 
-                  alignSelf: isMine ? "flex-end" : "flex-start", 
-                  maxWidth: "90%", display: "flex", flexDirection: "column",
-                  alignItems: isMine ? "flex-end" : "flex-start",
-                  marginBottom: 8
+          ) : messages.map((m, idx) => {
+            const isMine = m.userId === user.id;
+            const prevMsg = messages[idx - 1];
+            const isSameUser = prevMsg && prevMsg.userId === m.userId;
+            return (
+              <div key={m.id || m._id || idx} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", marginTop: isSameUser ? 2 : 10 }}>
+                {!isMine && !isSameUser && (
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cyan)", marginLeft: 4, marginBottom: 3 }}>{m.userName}</div>
+                )}
+                <div style={{
+                  maxWidth: "70%", padding: "10px 16px",
+                  borderRadius: isMine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  fontSize: 14, lineHeight: 1.5, wordBreak: "break-word",
+                  background: isMine ? "linear-gradient(135deg, rgba(0,255,157,0.2), rgba(0,207,255,0.12))" : "var(--bg3)",
+                  border: isMine ? "1px solid rgba(0,255,157,0.25)" : "1px solid var(--border)",
+                  color: "var(--text)",
                 }}>
-                  {!isMine && !isSameUser && (
-                    <div className="chat-meta" style={{ marginLeft: 4, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ color: "var(--cyan)", fontWeight: 700 }}>{m.userName}</span>
-                      <span style={{ fontSize: 8, opacity: 0.5 }}>• {fmt(m.created_at)}</span>
-                    </div>
-                  )}
-                  
-                  <div className={`chat-bubble ${isMine ? "mine" : "theirs"}`} style={{
-                    padding: "12px 18px", borderRadius: "14px", fontSize: "14px", lineHeight: "1.5",
-                    background: isMine ? "linear-gradient(135deg, rgba(0,255,157,0.15), rgba(0,207,255,0.1))" : "var(--bg3)",
-                    border: isMine ? "1px solid rgba(0,255,157,0.2)" : "1px solid var(--border)",
-                    borderBottomRightRadius: isMine ? "2px" : "14px",
-                    borderBottomLeftRadius: !isMine ? "2px" : "14px",
-                    boxShadow: isMine ? "0 4px 12px rgba(0,255,157,0.05)" : "none",
-                    minWidth: "120px"
-                  }}>
-                    {m.text}
-                  </div>
-                  
-                  {isMine && !isSameUser && (
-                    <div className="chat-meta" style={{ alignSelf: "flex-end", marginRight: 4, marginTop: 4, fontSize: 8, opacity: 0.5 }}>
-                      {fmt(m.created_at)}
-                    </div>
-                  )}
+                  {m.text}
                 </div>
-              );
-            })
+                <div style={{ fontSize: 10, color: "var(--text2)", marginTop: 3, marginLeft: 4, marginRight: 4 }}>{fmt(m.created_at)}</div>
+              </div>
+            );
+          })}
+
+          {/* Typing dots */}
+          {typingNames.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+              <div style={{ display: "flex", gap: 3, padding: "8px 14px", background: "var(--bg3)", borderRadius: "14px 14px 14px 4px", border: "1px solid var(--border)" }}>
+                {[0,1,2].map(i => (
+                  <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text2)", animation: `pulse 1.2s ${i * 0.2}s infinite` }} />
+                ))}
+              </div>
+            </div>
           )}
           <div ref={bottomRef} />
         </div>
 
-        <div className="chat-input-row" style={{ padding: "16px", background: "rgba(0,0,0,0.1)", borderTop: "1px solid var(--border)" }}>
-          <div style={{ display: "flex", gap: 10, position: "relative" }}>
+        {/* Input */}
+        <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", background: "var(--bg2)", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
             <textarea
               className="chat-input"
               rows={1}
-              placeholder={`Message ${currentTargetName}...`}
-              style={{ borderRadius: "10px", paddingRight: "80px", minHeight: "44px", maxHeight: "120px" }}
+              placeholder={`Message ${currentTargetName}…`}
+              style={{ flex: 1, borderRadius: 12, minHeight: 44, maxHeight: 120, paddingRight: 16 }}
               value={text}
-              onChange={e => {
-                setText(e.target.value);
-                e.target.style.height = "auto";
-                e.target.style.height = e.target.scrollHeight + "px";
-              }}
+              onChange={handleTextChange}
               onKeyDown={onKey}
             />
-            <button className="btn btn-primary" style={{ position: "absolute", right: "6px", top: "6px", bottom: "6px", borderRadius: "8px", padding: "0 20px" }} onClick={send} disabled={!text.trim() || sending}>
-              {sending ? "..." : "Send"}
+            <button className="btn btn-primary" style={{ borderRadius: 12, height: 44, padding: "0 22px", flexShrink: 0 }} onClick={send} disabled={!text.trim() || sending}>
+              {sending ? "…" : "Send"}
             </button>
           </div>
         </div>
@@ -1793,7 +1854,6 @@ function ChatPage({ user, wsRef }) {
     </div>
   );
 }
-
 
 // ─── AI SUGGESTIONS PAGE ───────────────────────────────────────────────────────
 function AISuggestPage({ toast }) {

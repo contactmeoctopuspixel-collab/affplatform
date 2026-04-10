@@ -73,7 +73,7 @@ export const api = {
 // WebSocket client
 export function createWS(onMessage) {
   const proto = window.location.protocol === "https:" ? "wss://" : "ws://";
-  const WS_URL = (import.meta?.env?.VITE_WS_URL || (proto + window.location.host + "/api")) + "/ws";
+  const WS_URL = (import.meta?.env?.VITE_WS_URL || (proto + window.location.host)) + "/ws";
   let ws, retryTimeout;
 
   function connect() {
@@ -85,5 +85,8 @@ export function createWS(onMessage) {
   }
 
   connect();
-  return { close: () => { clearTimeout(retryTimeout); ws?.close(); } };
+  return {
+    close: () => { clearTimeout(retryTimeout); ws?.close(); },
+    send:  (data) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(data)); },
+  };
 }
