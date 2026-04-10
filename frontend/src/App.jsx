@@ -2583,22 +2583,39 @@ export default function App() {
             }}
             style={{
               pointerEvents:"all", cursor: n.kind==="msg" ? "pointer" : "default",
+              position: "relative",
               background: n.kind==="msg"
-                ? "linear-gradient(135deg,rgba(0,255,157,0.12),rgba(0,207,255,0.08))"
-                : "linear-gradient(135deg,rgba(255,159,10,0.14),rgba(255,69,58,0.08))",
-              border: `1px solid ${n.kind==="msg" ? "rgba(0,255,157,0.35)" : "rgba(255,159,10,0.4)"}`,
-              borderRadius:14, padding:"14px 18px", minWidth:280, maxWidth:360,
-              boxShadow:"0 8px 32px rgba(0,0,0,0.45)", backdropFilter:"blur(12px)",
+                ? "linear-gradient(135deg,rgba(0,20,15,0.95),rgba(0,30,40,0.95))"
+                : "linear-gradient(135deg,rgba(30,20,0,0.95),rgba(30,10,0,0.95))",
+              border: `1px solid ${n.kind==="msg" ? "rgba(0,255,157,0.4)" : "rgba(255,159,10,0.5)"}`,
+              borderRadius:14, padding:"14px 18px", minWidth:290, maxWidth:370,
+              boxShadow:`0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px ${n.kind==="msg" ? "rgba(0,255,157,0.1)" : "rgba(255,159,10,0.1)"}`,
+              backdropFilter:"blur(20px)",
               animation:"slideIn .3s ease",
             }}
           >
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-              <div style={{fontWeight:700,fontSize:13,color: n.kind==="msg" ? "var(--green)" : "var(--orange)"}}>{n.title}</div>
-              <div style={{fontSize:10,color:"var(--text2)",marginLeft:12,flexShrink:0}}>{n.time}</div>
+            {/* Header row */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <div style={{fontWeight:700,fontSize:14,color: n.kind==="msg" ? "#00ff9d" : "#ff9f0a"}}>
+                {n.title}
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>{n.time}</span>
+                <span
+                  onClick={e=>{e.stopPropagation();setPopNotifs(p=>p.filter(x=>x.id!==n.id));}}
+                  style={{cursor:"pointer",color:"rgba(255,255,255,0.4)",fontSize:14,lineHeight:1}}
+                >✕</span>
+              </div>
             </div>
-            <div style={{fontSize:12,color:"var(--text)",lineHeight:1.5,wordBreak:"break-word"}}>{n.body}</div>
-            {n.kind==="msg" && <div style={{fontSize:10,color:"var(--text2)",marginTop:6,fontStyle:"italic"}}>Click to open chat →</div>}
-            <div onClick={e=>{e.stopPropagation();setPopNotifs(p=>p.filter(x=>x.id!==n.id));}} style={{position:"absolute",top:8,right:10,cursor:"pointer",opacity:0.5,fontSize:12}}>✕</div>
+            {/* Message body — always visible */}
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.85)",lineHeight:1.5,wordBreak:"break-word",whiteSpace:"pre-wrap"}}>
+              {n.body}
+            </div>
+            {n.kind==="msg" && (
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:8,fontStyle:"italic"}}>
+                Tap to open conversation →
+              </div>
+            )}
           </div>
         ))}
       </div>
