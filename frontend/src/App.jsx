@@ -683,69 +683,74 @@ function DashboardPage() {
               {geoData.geo.reduce((s,g)=>s+g.conversions,0)} conversions
             </span>
           </div>
-          <div style={{padding:"10px 14px"}}>
-            <svg viewBox="0 0 800 400" style={{width:"100%",height:"auto",display:"block"}}>
-              {/* Ocean bg */}
-              <rect width="800" height="400" fill="#080b12"/>
-              {/* Grid */}
-              {[50,100,150,200,250,300,350].map(y => <line key={`h${y}`} x1="0" y1={y} x2="800" y2={y} stroke="#111827" strokeWidth="0.5"/>)}
-              {[100,200,300,400,500,600,700].map(x => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="400" stroke="#111827" strokeWidth="0.5"/>)}
-              {/* Simplified continent outlines */}
-              <g fill="#141a26" stroke="#1e293b" strokeWidth="0.8">
+          <div style={{padding:"8px 12px"}}>
+            <svg viewBox="0 0 800 380" style={{width:"100%",height:"auto",display:"block"}}>
+              {/* Ocean bg — deep navy */}
+              <rect width="800" height="380" fill="#080c14"/>
+              {/* All world continents — dark charcoal gray */}
+              <g fill="#141a26" stroke="#1e2a3a" strokeWidth="0.7" strokeLinejoin="round">
                 {/* North America */}
-                <path d="M95,175 Q100,85 150,60 Q200,55 230,70 Q260,85 250,120 Q240,155 220,170 Q200,185 180,195 Q150,210 130,200 Q110,190 95,175Z"/>
-                {/* South America */}
-                <path d="M215,210 Q230,200 245,210 Q260,230 265,260 Q268,300 260,330 Q250,355 240,360 Q228,355 225,330 Q218,290 215,250Z"/>
-                {/* Europe */}
-                <path d="M390,130 Q400,100 420,85 Q440,80 460,85 Q480,95 490,115 Q495,135 490,150 Q480,165 465,170 Q450,175 435,170 Q415,165 400,150Z"/>
-                {/* Africa */}
-                <path d="M395,180 Q410,170 430,172 Q450,175 460,190 Q470,215 472,245 Q474,280 470,310 Q465,335 455,345 Q440,348 430,340 Q418,320 412,290 Q405,255 398,220Z"/>
-                {/* Asia */}
-                <path d="M500,85 Q530,65 570,60 Q620,55 670,65 Q720,80 750,105 Q770,130 770,160 Q765,185 760,200 Q745,215 730,220 Q700,225 670,220 Q640,215 610,200 Q580,185 560,170 Q535,155 515,135 Q502,115 500,95Z"/>
-                {/* Australia */}
-                <path d="M720,280 Q735,270 755,272 Q775,275 785,290 Q790,310 785,325 Q775,338 760,340 Q745,338 735,325 Q725,310 720,295Z"/>
-                {/* UK/Ireland */}
-                <path d="M370,110 Q378,100 388,105 Q392,115 388,125 Q380,130 373,125 Q368,118 370,110Z"/>
-                {/* Japan */}
-                <path d="M770,95 Q778,90 782,98 Q785,110 782,120 Q776,128 770,122 Q767,112 770,95Z"/>
+                <path d="M60,155 L70,130 L85,105 L100,85 L120,70 L145,58 L175,52 L205,55 L235,65 L258,80 L265,100 L260,120 L252,140 L240,158 L225,170 L210,180 L195,188 L175,195 L155,198 L135,196 L115,190 L95,180 L80,170Z"/>
+                {/* Canada (northern part) */}
+                <path d="M60,155 L70,130 L85,105 L100,85 L120,70 L145,58 L175,52 L205,55 L235,65 L258,80 L265,100 L260,120 L252,135 L240,130 L220,125 L200,122 L180,120 L160,122 L140,128 L120,135 L100,140 L85,145Z"/>
                 {/* Greenland */}
-                <path d="M295,55 Q310,45 330,50 Q340,60 335,75 Q325,82 310,80 Q298,72 295,62Z"/>
-                {/* Middle East (extra) */}
-                <path d="M485,165 Q498,158 510,162 Q518,170 515,182 Q505,190 495,188 Q485,180 485,165Z"/>
+                <path d="M280,50 L300,42 L325,45 L340,55 L342,70 L335,82 L318,88 L298,85 L282,72 L278,60Z"/>
+                {/* South America */}
+                <path d="M215,205 L228,195 L242,192 L255,198 L268,210 L278,230 L285,255 L288,280 L285,310 L278,338 L268,355 L255,365 L242,368 L230,362 L220,348 L213,325 L208,295 L205,265 L207,235Z"/>
+                {/* Europe (detailed) */}
+                <path d="M388,130 L392,115 L400,100 L412,88 L428,80 L445,78 L462,82 L478,90 L490,102 L498,118 L500,135 L498,148 L492,158 L482,165 L468,170 L452,172 L438,170 L422,165 L408,155 L398,145Z"/>
+                {/* UK */}
+                <path d="M370,108 L378,100 L388,103 L394,112 L392,122 L385,130 L376,128 L370,120Z"/>
+                {/* Scandinavia */}
+                <path d="M448,55 L455,52 L462,58 L466,70 L462,82 L455,80 L450,72 L448,62Z"/>
+                {/* Africa (detailed) */}
+                <path d="M395,180 L408,172 L422,170 L438,172 L452,178 L462,190 L470,210 L475,235 L476,260 L473,285 L468,308 L460,328 L448,342 L435,348 L420,345 L408,335 L398,315 L392,290 L387,260 L385,230 L388,205Z"/>
+                {/* Madagascar */}
+                <path d="M480,320 L488,315 L492,322 L490,335 L485,340 L480,335Z"/>
+                {/* Asia (detailed) */}
+                <path d="M508,125 L520,105 L540,90 L565,78 L595,70 L630,65 L665,68 L700,75 L732,88 L755,105 L768,125 L775,148 L778,168 L775,185 L768,198 L755,208 L738,215 L718,218 L695,216 L670,212 L645,205 L620,195 L598,185 L580,172 L562,158 L548,142L535,132Z"/>
                 {/* India */}
-                <path d="M610,170 Q620,162 632,165 Q640,175 638,190 Q635,205 625,212 Q614,210 610,198 Q606,185 610,170Z"/>
+                <path d="M618,165 L628,158 L640,162 L648,172 L650,188 L645,205 L638,215 L628,218 L618,212 L612,200 L608,185Z"/>
+                {/* Middle East / Arabian Peninsula */}
+                <path d="M505,168 L515,162 L528,160 L540,165 L548,175 L550,190 L545,205 L535,212 L522,215 L512,210 L505,200 L502,185Z"/>
                 {/* Southeast Asia */}
-                <path d="M675,190 Q685,182 695,185 Q702,195 700,208 Q692,215 682,212 Q675,205 675,190Z"/>
+                <path d="M688,185 L698,178 L710,180 L718,190 L720,205 L715,218 L705,222 L695,218 L688,208 L685,195Z"/>
+                {/* Japan */}
+                <path d="M785,90 L792,85 L798,92 L800,108 L796,120 L790,126 L784,120 L780,108Z"/>
+                {/* Indonesia / Archipelago */}
+                <path d="M700,265 L712,260 L725,262 L735,268 L730,275 L718,278 L705,275Z"/>
+                <path d="M740,270 L750,266 L762,268 L770,275 L765,282 L752,284 L740,280Z"/>
+                {/* Philippines */}
+                <path d="M730,218 L736,212 L742,216 L744,228 L740,238 L734,240 L728,232Z"/>
+                {/* Australia */}
+                <path d="M715,278 L730,272 L748,270 L765,274 L778,282 L785,295 L786,312 L780,328 L768,338 L752,342 L735,340 L722,332 L714,318 L710,300Z"/>
+                {/* New Zealand */}
+                <path d="M795,335 L800,330 L802,340 L800,348 L795,350 L792,345Z"/>
               </g>
-              {/* Country highlights — cyan glow for active regions */}
+              {/* Active country fills — neon cyan with glow */}
               {geoData.geo.map(g => {
-                const c = {
-                  MA: { x: 350, y: 275, label:"Morocco" },
-                  FR: { x: 430, y: 138, label:"France" },
-                  BE: { x: 440, y: 120, label:"Belgium" },
-                  NL: { x: 445, y: 112, label:"Netherlands" },
-                  DZ: { x: 380, y: 290, label:"Algeria" },
-                  TN: { x: 410, y: 272, label:"Tunisia" },
-                  AE: { x: 555, y: 230, label:"UAE" },
-                  SA: { x: 520, y: 235, label:"Saudi Arabia" },
+                const shape = {
+                  MA: { d:"M340,258 L350,254 L365,255 L375,260 L378,272 L372,282 L362,286 L350,284 L342,278 Z", cx:358, cy:270 },
+                  FR: { d:"M418,132 L425,126 L438,124 L448,128 L454,138 L455,150 L450,160 L442,164 L432,163 L424,158 L418,148 Z", cx:436, cy:144 },
+                  BE: { d:"M436,113 L442,110 L448,112 L450,118 L448,124 L442,126 L438,124 L435,120 Z", cx:443, cy:118 },
+                  NL: { d:"M438,102 L444,98 L450,100 L452,106 L450,110 L444,112 L440,110 L438,106 Z", cx:445, cy:105 },
+                  DZ: { d:"M360,268 L375,262 L390,260 L408,262 L420,268 L425,278 L422,290 L415,298 L402,302 L388,300 L375,295 L365,288 L360,280 Z", cx:392, cy:280 },
+                  TN: { d:"M408,258 L415,254 L422,256 L426,262 L424,270 L418,274 L412,272 L408,266 Z", cx:416, cy:264 },
+                  AE: { d:"M548,222 L555,218 L562,220 L565,226 L562,234 L556,236 L550,234 L548,228 Z", cx:556, cy:227 },
+                  SA: { d:"M515,218 L528,212 L542,214 L552,220 L556,232 L552,242 L542,248 L530,250 L520,246 L512,238 L508,228 Z", cx:532, cy:230 },
                 }[g.code];
-                if (!c) return null;
-                const maxRev = Math.max(...geoData.geo.map(x => x.revenue), 1);
-                const intensity = 0.4 + (g.revenue / maxRev) * 0.6;
+                if (!shape) return null;
                 return (
                   <g key={g.code}>
-                    <circle cx={c.x} cy={c.y} r="22" fill="#00e5ff" opacity={0.04 * intensity}/>
-                    <circle cx={c.x} cy={c.y} r="14" fill="#00e5ff" opacity={0.08 * intensity}/>
-                    <circle cx={c.x} cy={c.y} r="7" fill="#00e5ff" opacity={0.15 * intensity}/>
-                    <circle cx={c.x} cy={c.y} r="3" fill="#00e5ff" opacity={0.5 * intensity}/>
-                    <text x={c.x} y={c.y - 10} textAnchor="middle" fill="#e2e8f0" fontSize="9" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
-                    <text x={c.x} y={c.y + 12} textAnchor="middle" fill="#00e5ff" fontSize="8" fontFamily="IBM Plex Mono,monospace" opacity="0.8">● ${Number(g.revenue).toFixed(0)}</text>
+                    <path d={shape.d} fill="#00e5ff" fillOpacity="0.08" stroke="#00e5ff" strokeWidth="3" strokeOpacity="0.15"/>
+                    <path d={shape.d} fill="#00e5ff" fillOpacity="0.18" stroke="#00e5ff" strokeWidth="1.2" strokeOpacity="0.5"/>
+                    <path d={shape.d} fill="#00e5ff" fillOpacity="0.25" stroke="#00e5ff" strokeWidth="0.6"/>
+                    <text x={shape.cx} y={shape.cy + 4} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
                   </g>
                 );
               })}
-              {/* Legend */}
-              <rect x="16" y="372" width="200" height="20" rx="4" fill="rgba(8,11,18,.8)"/>
-              <text x="24" y="385" fill="#5a7080" fontSize="9" fontFamily="IBM Plex Mono,monospace">● Highlighted = active markets</text>
+              {/* Attribution */}
+              <text x="790" y="372" textAnchor="end" fill="#2a3a4a" fontSize="7" fontFamily="IBM Plex Mono,monospace">●</text>
             </svg>
           </div>
         </div>
