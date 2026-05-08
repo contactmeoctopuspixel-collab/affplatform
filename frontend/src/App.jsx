@@ -446,7 +446,6 @@ function DashboardPage() {
   const [data,        setData]        = useState(null);
   const [subData,     setSubData]     = useState(null);
   const [geoData,     setGeoData]     = useState(null);
-  const [userAct,     setUserAct]     = useState(null);
   const [subSyncing,  setSubSyncing]  = useState(false);
   const [subSyncMsg,  setSubSyncMsg]  = useState("");
   const [subSyncInfo, setSubSyncInfo] = useState(null);
@@ -498,21 +497,19 @@ function DashboardPage() {
       const prevTo = new Date(new Date(dateFrom).getTime() - 1).toISOString().slice(0, 10);
       const prevFrom = new Date(new Date(dateFrom).getTime() - rangeMs).toISOString().slice(0, 10);
 
-      const [d, sub, syncInfo, sp, geo, prevDash, ua] = await Promise.all([
+      const [d, sub, syncInfo, sp, geo, prevDash] = await Promise.all([
         api.dashboard(dateFrom, dateTo),
         api.subAffiliates(dateFrom, dateTo).catch(() => null),
         api.convSyncStatus().catch(() => null),
         api.getSponsors().catch(() => ({ sponsors: [] })),
         api.geoDistribution(dateFrom, dateTo).catch(() => null),
         api.dashboard(prevFrom, prevTo).catch(() => null),
-        api.userActivity().catch(() => null),
       ]);
 
       setData(d);
       setSponsors(sp.sponsors || []);
       if (sub) setSubData(sub);
       if (geo) setGeoData(geo);
-      if (ua) setUserAct(ua);
       if (syncInfo) setSubSyncInfo(syncInfo);
 
       // Calculate trends
@@ -677,7 +674,7 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* ── GEOGRAPHIC DISTRIBUTION ───────────────────────────────────────── */}
+      {/* ── GEOGRAPHIC DISTRIBUTION — MAP ─────────────────────────────────── */}
       {geoData?.geo?.length > 0 && (
         <div className="card mb-6">
           <div className="card-head">
@@ -689,101 +686,120 @@ function DashboardPage() {
           <div style={{padding:"14px 18px"}}>
             {(() => {
               const maxRev = Math.max(...geoData.geo.map(g => g.revenue), 1);
-              return geoData.geo.map((g, i) => {
-                const pct = (g.revenue / maxRev * 100).toFixed(0);
-                return (
-                  <div key={g.code} style={{display:"flex",alignItems:"center",gap:12,marginBottom:i < geoData.geo.length-1 ? 12 : 0}}>
-                    <span style={{fontSize:22,width:30,textAlign:"center"}}>{g.flag}</span>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                        <span style={{fontWeight:600,fontSize:13}}>{g.name}</span>
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--green)",fontWeight:700}}>${Number(g.revenue).toFixed(2)}</span>
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <div style={{flex:1,height:5,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${g.code==="MA"?"var(--green)":g.code==="FR"?"var(--cyan)":g.code==="BE"?"var(--orange)":"var(--purple)"},${g.code==="MA"?"#00ff9d":g.code==="FR"?"#00cfff":g.code==="BE"?"#ff9f0a":"#bf5af2"})`,borderRadius:3,transition:"width .8s ease"}}/>
-                        </div>
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",minWidth:60}}>{g.conversions} conv</span>
-                        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",minWidth:50}}>{g.clicks} clk</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              });
+              const coords = {
+                MA: { x: 220, y: 340, color:"#00ff9d" },
+                FR: { x: 315, y: 245, color:"#00cfff" },
+                BE: { x: 325, y: 225, color:"#ff9f0a" },
+                NL: { x: 332, y: 210, color:"#bf5af2" },
+                DZ: { x: 260, y: 360, color:"#ff453a" },
+                TN: { x: 300, y: 340, color:"#ff9f0a" },
+                AE: { x: 490, y: 350, color:"#00ff9d" },
+                SA: { x: 440, y: 350, color:"#00cfff" },
+              };
+              const ctm = {
+                MA: "M 180 360 Q 200 380 240 370 Q 250 320 220 320 Q 190 330 180 360",
+                FR: "M 290 220 Q 300 200 330 210 Q 340 230 330 250 Q 310 260 300 240 Q 285 235 290 220",
+                UK: "M 275 190 Q 280 180 295 185 Q 295 200 285 205 Q 275 200 275 190",
+                ES: "M 250 260 Q 260 250 280 260 Q 280 300 270 310 Q 250 300 245 280 Q 240 270 250 260",
+                IT: "M 320 270 Q 330 260 340 270 Q 345 300 335 320 Q 325 310 320 290 Q 315 280 320 270",
+                DE: "M 310 195 Q 320 180 340 185 Q 345 210 335 220 Q 320 220 310 210 Q 305 200 310 195",
+              };
+              return (
+                <svg viewBox="0 0 580 440" style={{width:"100%",height:"auto",borderRadius:8,display:"block"}}>
+                  <rect width="580" height="440" fill="#0d1117" rx="8"/>
+                  {/* Grid lines */}
+                  {[60,140,220,300,380].map(y => <line key={`h${y}`} x1="0" y1={y} x2="580" y2={y} stroke="#1a2535" strokeWidth="1" strokeDasharray="4,4"/>)}
+                  {[100,200,300,400,500].map(x => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="440" stroke="#1a2535" strokeWidth="1" strokeDasharray="4,4"/>)}
+                  {/* Landmass hints */}
+                  <path d={ctm.MA} fill="rgba(0,255,157,.04)" stroke="rgba(0,255,157,.08)" strokeWidth="0.5"/>
+                  <path d={ctm.FR} fill="rgba(0,207,255,.04)" stroke="rgba(0,207,255,.08)" strokeWidth="0.5"/>
+                  <path d={ctm.ES} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
+                  <path d={ctm.IT} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
+                  <path d={ctm.DE} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
+                  <path d={ctm.UK} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
+                  {/* Connection arcs from center */}
+                  {geoData.geo.map(g => {
+                    const c = coords[g.code];
+                    if (!c) return null;
+                    return <line key={`ln-${g.code}`} x1="300" y1="200" x2={c.x} y2={c.y} stroke={c.color} strokeWidth="0.5" opacity="0.15" strokeDasharray="3,3"/>;
+                  })}
+                  {/* Country dots */}
+                  {geoData.geo.map(g => {
+                    const c = coords[g.code];
+                    if (!c) return null;
+                    const r = Math.max(6, (g.revenue / maxRev) * 32);
+                    const glow = r * 2;
+                    return (
+                      <g key={g.code}>
+                        <circle cx={c.x} cy={c.y} r={glow} fill={c.color} opacity="0.06" style={{transition:"r .6s"}}/>
+                        <circle cx={c.x} cy={c.y} r={r} fill={c.color} opacity="0.15" style={{transition:"r .6s"}}/>
+                        <circle cx={c.x} cy={c.y} r={Math.max(4, r-2)} fill={c.color} opacity="0.7" style={{transition:"r .6s"}}/>
+                        <circle cx={c.x} cy={c.y} r={3} fill="#fff" opacity="0.4"/>
+                        {/* Label */}
+                        <text x={c.x} y={c.y - r - 6} textAnchor="middle" fill="#e2e8f0" fontSize="10" fontFamily="IBM Plex Mono,monospace" fontWeight="700">
+                          {g.name}
+                        </text>
+                        <text x={c.x} y={c.y - r + 6} textAnchor="middle" fill={c.color} fontSize="9" fontFamily="IBM Plex Mono,monospace" opacity="0.7">
+                          ${Number(g.revenue).toFixed(0)}
+                        </text>
+                        {/* Metric badges */}
+                        <rect x={c.x - 28} y={c.y + r + 2} width="56" height="14" rx="4" fill="rgba(13,17,23,.8)"/>
+                        <text x={c.x} y={c.y + r + 12} textAnchor="middle" fill="#8892b0" fontSize="8" fontFamily="IBM Plex Mono,monospace">
+                          {g.conversions} cv · {g.clicks} cl
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {/* Legend */}
+                  <rect x="14" y="14" width="140" height="22" rx="4" fill="rgba(13,17,23,.7)"/>
+                  <text x="24" y="28" fill="#5a7080" fontSize="9" fontFamily="IBM Plex Mono,monospace">
+                    Size = Revenue
+                  </text>
+                </svg>
+              );
             })()}
           </div>
         </div>
       )}
 
-      {/* ── USER ACTIVITY + REVENUE BY SPONSOR row ────────────────────────── */}
-      <div className="grid-2 mb-6">
-        {/* User Activity */}
-        {userAct?.users?.length > 0 && (
-          <div className="card">
-            <div className="card-head">
-              <span className="card-title">User Activity</span>
-              <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-                {userAct.users.filter(u=>u.online).length} online
-              </span>
-            </div>
-            <div style={{padding:"6px 0"}}>
-              {userAct.users.map((u, i) => (
-                <div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:i<userAct.users.length-1?"1px solid var(--border)":"none"}}>
-                  <div style={{width:34,height:34,borderRadius:"50%",background:u.online?"linear-gradient(135deg,var(--green),var(--cyan))":"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:u.online?"var(--bg)":"var(--text2)",position:"relative"}}>
-                    {u.initials}
-                    {u.online && <span style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:"var(--green)",border:"2px solid var(--bg2)"}}/>}
+      {/* ── REVENUE BY SPONSOR ───────────────────────────────────────────── */}
+      <div className="card mb-6">
+        <div className="card-head">
+          <span className="card-title">Revenue by Sponsor (Live)</span>
+          <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+            {sponsorBreakdown?.filter(s => s.revenue > 0).length || 0} active
+          </span>
+        </div>
+        <div style={{padding:"6px 0"}}>
+          {(sponsorBreakdown || []).length > 0 ? (sponsorBreakdown || []).map((sp, i) => {
+            const maxRev = Math.max(...sponsorBreakdown.map(s => s.revenue || 0), 1);
+            const pct = ((sp.revenue || 0) / maxRev * 100).toFixed(0);
+            return (
+              <div key={sp.id} style={{padding:"10px 16px",borderBottom:i<sponsorBreakdown.length-1?"1px solid var(--border)":"none",opacity:sp.status==="pending"?0.5:1}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{width:7,height:7,borderRadius:"50%",background:sp.color,display:"inline-block"}}/>
+                    <span style={{fontSize:13,fontWeight:600}}>{sp.name}</span>
                   </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:600}}>{u.name}</div>
-                    <div style={{fontFamily:"var(--font-mono)",fontSize:10,color:u.online?"var(--green)":"var(--text2)"}}>
-                      {u.online ? "Active Now" : `Last seen ${u.lastSeen}`}
-                    </div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:700,color:"var(--green)"}}>${u.revenue}</div>
-                    <div style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>{u.conversions} conv</div>
-                  </div>
+                  <span style={{fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,color:sp.revenue>0?sp.color:"var(--text2)"}}>
+                    {sp.revenue > 0 ? `$${Number(sp.revenue).toFixed(2)}` : sp.status==="pending" ? "No key" : "$0.00"}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Revenue by Sponsor (Live) — condensed into right column */}
-        <div className="card">
-          <div className="card-head">
-            <span className="card-title">Revenue by Sponsor (Live)</span>
-            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-              {sponsorBreakdown?.filter(s => s.revenue > 0).length || 0} active
-            </span>
-          </div>
-          <div style={{padding:"6px 0"}}>
-            {(sponsorBreakdown || []).map((sp, i) => {
-              const maxRev = Math.max(...sponsorBreakdown.map(s => s.revenue || 0), 1);
-              const pct = (sp.relevance || sp.revenue || 0) > 0 ? ((sp.revenue || 0) / maxRev * 100).toFixed(0) : 0;
-              return (
-                <div key={sp.id} style={{padding:"10px 16px",borderBottom:i<sponsorBreakdown.length-1?"1px solid var(--border)":"none",opacity:sp.status==="pending"?0.5:1}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{width:7,height:7,borderRadius:"50%",background:sp.color,display:"inline-block"}}/>
-                      <span style={{fontSize:13,fontWeight:600}}>{sp.name}</span>
-                    </div>
-                    <span style={{fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,color:sp.revenue>0?sp.color:"var(--text2)"}}>
-                      {sp.revenue > 0 ? `$${Number(sp.revenue).toFixed(2)}` : sp.status==="pending" ? "No key" : "$0.00"}
-                    </span>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${pct}%`,background:sp.color,borderRadius:2,transition:"width .8s ease"}}/>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${pct}%`,background:sp.color,borderRadius:2,transition:"width .8s ease"}}/>
-                    </div>
-                    <span style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)"}}>
-                      {Number(sp.clicks).toLocaleString()} clk · {sp.leads} ld
-                    </span>
-                  </div>
+                  <span style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)"}}>
+                    {Number(sp.clicks).toLocaleString()} clk · {sp.leads} ld
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          }) : (
+            <div style={{padding:"16px",textAlign:"center",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+              No sponsor data yet — sync your sponsors
+            </div>
+          )}
         </div>
       </div>
 

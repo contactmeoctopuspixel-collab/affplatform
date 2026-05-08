@@ -69,9 +69,6 @@ export const api = {
   // Geo
   geoDistribution: (from, to) => req("GET", `/stats/geo?from=${from||''}&to=${to||''}`),
 
-  // User Activity
-  userActivity: () => req("GET", "/stats/user-activity"),
-
   // Health
   health: () => req("GET", "/health"),
 };
