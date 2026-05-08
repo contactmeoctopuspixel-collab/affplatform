@@ -23,7 +23,7 @@ const db = {
 };
 
 // Stop auto-compaction to prevent EBUSY lock errors when multiple processes start
-Object.values(db).forEach(store => store.stopAutocompaction?.());
+Object.values(db).forEach(store => { if (store.stopAutocompaction) store.stopAutocompaction(); });
 
 db.users.ensureIndex({ fieldName: "email", unique: true });
 
