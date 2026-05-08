@@ -687,74 +687,68 @@ function DashboardPage() {
             {(() => {
               const maxRev = Math.max(...geoData.geo.map(g => g.revenue), 1);
               const coords = {
-                MA: { x: 220, y: 340, color:"#00ff9d" },
-                FR: { x: 315, y: 245, color:"#00cfff" },
-                BE: { x: 325, y: 225, color:"#ff9f0a" },
-                NL: { x: 332, y: 210, color:"#bf5af2" },
-                DZ: { x: 260, y: 360, color:"#ff453a" },
-                TN: { x: 300, y: 340, color:"#ff9f0a" },
-                AE: { x: 490, y: 350, color:"#00ff9d" },
-                SA: { x: 440, y: 350, color:"#00cfff" },
+                MA: { x: 0.38, y: 0.77, color:"#00ff9d" },
+                FR: { x: 0.54, y: 0.56, color:"#00cfff" },
+                BE: { x: 0.56, y: 0.51, color:"#ff9f0a" },
+                NL: { x: 0.57, y: 0.48, color:"#bf5af2" },
+                DZ: { x: 0.45, y: 0.82, color:"#ff453a" },
+                TN: { x: 0.52, y: 0.77, color:"#ff9f0a" },
+                AE: { x: 0.84, y: 0.80, color:"#00ff9d" },
+                SA: { x: 0.76, y: 0.80, color:"#00cfff" },
               };
-              const ctm = {
-                MA: "M 180 360 Q 200 380 240 370 Q 250 320 220 320 Q 190 330 180 360",
-                FR: "M 290 220 Q 300 200 330 210 Q 340 230 330 250 Q 310 260 300 240 Q 285 235 290 220",
-                UK: "M 275 190 Q 280 180 295 185 Q 295 200 285 205 Q 275 200 275 190",
-                ES: "M 250 260 Q 260 250 280 260 Q 280 300 270 310 Q 250 300 245 280 Q 240 270 250 260",
-                IT: "M 320 270 Q 330 260 340 270 Q 345 300 335 320 Q 325 310 320 290 Q 315 280 320 270",
-                DE: "M 310 195 Q 320 180 340 185 Q 345 210 335 220 Q 320 220 310 210 Q 305 200 310 195",
-              };
+              const W = 100, H = 100;
+              const mapW = 80, mapH = 68;
+              const ox = (W - mapW) / 2, oy = (H - mapH) / 2 + 8;
+              const cx = ox + mapW * 0.5, cy = oy + mapH * 0.42;
               return (
-                <svg viewBox="0 0 580 440" style={{width:"100%",height:"auto",borderRadius:8,display:"block"}}>
-                  <rect width="580" height="440" fill="#0d1117" rx="8"/>
-                  {/* Grid lines */}
-                  {[60,140,220,300,380].map(y => <line key={`h${y}`} x1="0" y1={y} x2="580" y2={y} stroke="#1a2535" strokeWidth="1" strokeDasharray="4,4"/>)}
-                  {[100,200,300,400,500].map(x => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="440" stroke="#1a2535" strokeWidth="1" strokeDasharray="4,4"/>)}
-                  {/* Landmass hints */}
-                  <path d={ctm.MA} fill="rgba(0,255,157,.04)" stroke="rgba(0,255,157,.08)" strokeWidth="0.5"/>
-                  <path d={ctm.FR} fill="rgba(0,207,255,.04)" stroke="rgba(0,207,255,.08)" strokeWidth="0.5"/>
-                  <path d={ctm.ES} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
-                  <path d={ctm.IT} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
-                  <path d={ctm.DE} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
-                  <path d={ctm.UK} fill="rgba(0,207,255,.03)" stroke="rgba(0,207,255,.06)" strokeWidth="0.5"/>
-                  {/* Connection arcs from center */}
+                <svg viewBox="0 0 100 100" style={{width:"100%",height:"auto",display:"block"}}>
+                  <rect width="100" height="100" fill="none"/>
+                  {/* Grid */}
+                  {[oy, oy+mapH*0.25, oy+mapH*0.5, oy+mapH*0.75, oy+mapH].map(y =>
+                    <line key={`h${y}`} x1={ox} y1={y} x2={ox+mapW} y2={y} stroke="#1a2535" strokeWidth="0.4" strokeDasharray="1.5,1.5"/>
+                  )}
+                  {[ox, ox+mapW*0.25, ox+mapW*0.5, ox+mapW*0.75, ox+mapW].map(x =>
+                    <line key={`v${x}`} x1={x} y1={oy} x2={x} y2={oy+mapH} stroke="#1a2535" strokeWidth="0.4" strokeDasharray="1.5,1.5"/>
+                  )}
+                  {/* Continental outline hint */}
+                  <rect x={ox} y={oy} width={mapW} height={mapH} fill="rgba(255,255,255,.015)" stroke="rgba(255,255,255,.04)" strokeWidth="0.3" rx="2"/>
+                  {/* Connection arcs */}
                   {geoData.geo.map(g => {
-                    const c = coords[g.code];
-                    if (!c) return null;
-                    return <line key={`ln-${g.code}`} x1="300" y1="200" x2={c.x} y2={c.y} stroke={c.color} strokeWidth="0.5" opacity="0.15" strokeDasharray="3,3"/>;
+                    const c = coords[g.code]; if (!c) return null;
+                    const px = ox + mapW * c.x, py = oy + mapH * c.y;
+                    return <line key={`ln-${g.code}`} x1={cx} y1={cy} x2={px} y2={py} stroke={c.color} strokeWidth="0.3" opacity="0.2"/>;
                   })}
-                  {/* Country dots */}
+                  {/* Country markers */}
                   {geoData.geo.map(g => {
-                    const c = coords[g.code];
-                    if (!c) return null;
-                    const r = Math.max(6, (g.revenue / maxRev) * 32);
-                    const glow = r * 2;
+                    const c = coords[g.code]; if (!c) return null;
+                    const px = ox + mapW * c.x, py = oy + mapH * c.y;
+                    const r = 1.5 + (g.revenue / maxRev) * 5;
                     return (
                       <g key={g.code}>
-                        <circle cx={c.x} cy={c.y} r={glow} fill={c.color} opacity="0.06" style={{transition:"r .6s"}}/>
-                        <circle cx={c.x} cy={c.y} r={r} fill={c.color} opacity="0.15" style={{transition:"r .6s"}}/>
-                        <circle cx={c.x} cy={c.y} r={Math.max(4, r-2)} fill={c.color} opacity="0.7" style={{transition:"r .6s"}}/>
-                        <circle cx={c.x} cy={c.y} r={3} fill="#fff" opacity="0.4"/>
-                        {/* Label */}
-                        <text x={c.x} y={c.y - r - 6} textAnchor="middle" fill="#e2e8f0" fontSize="10" fontFamily="IBM Plex Mono,monospace" fontWeight="700">
-                          {g.name}
-                        </text>
-                        <text x={c.x} y={c.y - r + 6} textAnchor="middle" fill={c.color} fontSize="9" fontFamily="IBM Plex Mono,monospace" opacity="0.7">
-                          ${Number(g.revenue).toFixed(0)}
-                        </text>
-                        {/* Metric badges */}
-                        <rect x={c.x - 28} y={c.y + r + 2} width="56" height="14" rx="4" fill="rgba(13,17,23,.8)"/>
-                        <text x={c.x} y={c.y + r + 12} textAnchor="middle" fill="#8892b0" fontSize="8" fontFamily="IBM Plex Mono,monospace">
-                          {g.conversions} cv · {g.clicks} cl
-                        </text>
+                        <circle cx={px} cy={py} r={r*2.5} fill={c.color} opacity="0.06"/>
+                        <circle cx={px} cy={py} r={r*1.5} fill={c.color} opacity="0.15"/>
+                        <circle cx={px} cy={py} r={r} fill={c.color} opacity="0.85"/>
+                        <circle cx={px} cy={py} r="0.6" fill="#fff" opacity="0.5"/>
+                        <text x={px} y={py - r - 2} textAnchor="middle" fill="#e2e8f0" fontSize="2.8" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
+                        <text x={px} y={py - r + 2.5} textAnchor="middle" fill={c.color} fontSize="2.2" fontFamily="IBM Plex Mono,monospace" opacity="0.7">${Number(g.revenue).toFixed(0)}</text>
                       </g>
                     );
                   })}
-                  {/* Legend */}
-                  <rect x="14" y="14" width="140" height="22" rx="4" fill="rgba(13,17,23,.7)"/>
-                  <text x="24" y="28" fill="#5a7080" fontSize="9" fontFamily="IBM Plex Mono,monospace">
-                    Size = Revenue
-                  </text>
+                  {/* Flag labels row at bottom */}
+                  {geoData.geo.map((g, i) => {
+                    const c = coords[g.code]; if (!c) return null;
+                    const cols = Math.min(geoData.geo.length, 4);
+                    const row = Math.floor(i / cols);
+                    const col = i % cols;
+                    const fx = 10 + col * 22;
+                    const fy = 88 + row * 10;
+                    return (
+                      <g key={`fg-${g.code}`}>
+                        <text x={fx} y={fy} fontSize="3.5" fill={c.color}>{g.flag}</text>
+                        <text x={fx + 5} y={fy} fontSize="2.5" fill="#8892b0" fontFamily="IBM Plex Mono,monospace">{g.name}</text>
+                      </g>
+                    );
+                  })}
                 </svg>
               );
             })()}
@@ -762,45 +756,61 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* ── REVENUE BY SPONSOR ───────────────────────────────────────────── */}
-      <div className="card mb-6">
-        <div className="card-head">
-          <span className="card-title">Revenue by Sponsor (Live)</span>
-          <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-            {sponsorBreakdown?.filter(s => s.revenue > 0).length || 0} active
-          </span>
+      {/* ── REVENUE BY SPONSOR (Cards) ────────────────────────────────────── */}
+      <div className="mb-6">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div className="sec-title" style={{marginBottom:0}}>Revenue by Sponsor (Live)</div>
+          {sponsorBreakdown && <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+            {sponsorBreakdown.filter(s => s.revenue > 0).length || 0} active
+          </span>}
         </div>
-        <div style={{padding:"6px 0"}}>
-          {(sponsorBreakdown || []).length > 0 ? (sponsorBreakdown || []).map((sp, i) => {
-            const maxRev = Math.max(...sponsorBreakdown.map(s => s.revenue || 0), 1);
-            const pct = ((sp.revenue || 0) / maxRev * 100).toFixed(0);
-            return (
-              <div key={sp.id} style={{padding:"10px 16px",borderBottom:i<sponsorBreakdown.length-1?"1px solid var(--border)":"none",opacity:sp.status==="pending"?0.5:1}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{width:7,height:7,borderRadius:"50%",background:sp.color,display:"inline-block"}}/>
-                    <span style={{fontSize:13,fontWeight:600}}>{sp.name}</span>
+        {(sponsorBreakdown || []).length > 0 ? (
+          <div className="sp-grid">
+            {sponsorBreakdown.map(sp => {
+              const maxRev = Math.max(...sponsorBreakdown.map(s => s.revenue || 0), 1);
+              const pct = ((sp.revenue || 0) / maxRev * 100).toFixed(0);
+              return (
+                <div key={sp.id} className="sp-card" style={{"--sc":sp.color,opacity:sp.status==="pending"?0.5:1}}>
+                  <div className="sp-top">
+                    <div>
+                      <div className="sp-name">{sp.name}</div>
+                      <div className="sp-meta">{sp.id}</div>
+                    </div>
+                    <span className={`badge badge-${sp.status==="connected"?"connected":sp.status==="pending"?"pending":"error"}`}>
+                      {sp.status?.toUpperCase() || "PENDING"}
+                    </span>
                   </div>
-                  <span style={{fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,color:sp.revenue>0?sp.color:"var(--text2)"}}>
-                    {sp.revenue > 0 ? `$${Number(sp.revenue).toFixed(2)}` : sp.status==="pending" ? "No key" : "$0.00"}
-                  </span>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${pct}%`,background:sp.color,borderRadius:2,transition:"width .8s ease"}}/>
+                  <div className="sp-metrics">
+                    <div className="metric">
+                      <div className="metric-l">Revenue</div>
+                      <div className="metric-v" style={{color:sp.revenue>0?sp.color:"var(--text2)"}}>
+                        {sp.revenue > 0 ? `$${Number(sp.revenue).toFixed(2)}` : "$0.00"}
+                      </div>
+                    </div>
+                    <div className="metric">
+                      <div className="metric-l">Clicks</div>
+                      <div className="metric-v">{Number(sp.clicks).toLocaleString()}</div>
+                    </div>
+                    <div className="metric">
+                      <div className="metric-l">Leads</div>
+                      <div className="metric-v">{sp.leads}</div>
+                    </div>
                   </div>
-                  <span style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)"}}>
-                    {Number(sp.clicks).toLocaleString()} clk · {sp.leads} ld
-                  </span>
+                  <div className="prog-bar">
+                    <div className="prog-fill" style={{width:`${pct}%`,background:`linear-gradient(90deg,${sp.color},transparent)`}}/>
+                  </div>
+                  <div className="sp-last" style={{marginTop:8}}>
+                    {sp.last_sync ? `Synced ${new Date(sp.last_sync).toLocaleTimeString()}` : "Not synced"}
+                  </div>
                 </div>
-              </div>
-            );
-          }) : (
-            <div style={{padding:"16px",textAlign:"center",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-              No sponsor data yet — sync your sponsors
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="card" style={{padding:"20px",textAlign:"center",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text2)"}}>
+            No sponsor data yet — sync your sponsors
+          </div>
+        )}
       </div>
 
       {/* ── SUB-AFFILIATE LEADERBOARD ─────────────────────────────────────── */}
