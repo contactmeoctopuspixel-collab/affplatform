@@ -674,7 +674,7 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* ── GEOGRAPHIC DISTRIBUTION — MAP ─────────────────────────────────── */}
+      {/* ── GEOGRAPHIC DISTRIBUTION — WORLD MAP ──────────────────────────── */}
       {geoData?.geo?.length > 0 && (
         <div className="card mb-6">
           <div className="card-head">
@@ -683,80 +683,75 @@ function DashboardPage() {
               {geoData.geo.reduce((s,g)=>s+g.conversions,0)} conversions
             </span>
           </div>
-          <div style={{padding:"14px 18px"}}>
-            {(() => {
-              const maxRev = Math.max(...geoData.geo.map(g => g.revenue), 1);
-              const coords = {
-                MA: { x: 0.38, y: 0.77, color:"#00ff9d" },
-                FR: { x: 0.54, y: 0.56, color:"#00cfff" },
-                BE: { x: 0.56, y: 0.51, color:"#ff9f0a" },
-                NL: { x: 0.57, y: 0.48, color:"#bf5af2" },
-                DZ: { x: 0.45, y: 0.82, color:"#ff453a" },
-                TN: { x: 0.52, y: 0.77, color:"#ff9f0a" },
-                AE: { x: 0.84, y: 0.80, color:"#00ff9d" },
-                SA: { x: 0.76, y: 0.80, color:"#00cfff" },
-              };
-              const W = 100, H = 100;
-              const mapW = 80, mapH = 68;
-              const ox = (W - mapW) / 2, oy = (H - mapH) / 2 + 8;
-              const cx = ox + mapW * 0.5, cy = oy + mapH * 0.42;
-              return (
-                <svg viewBox="0 0 100 100" style={{width:"100%",height:"auto",display:"block"}}>
-                  <rect width="100" height="100" fill="none"/>
-                  {/* Grid */}
-                  {[oy, oy+mapH*0.25, oy+mapH*0.5, oy+mapH*0.75, oy+mapH].map(y =>
-                    <line key={`h${y}`} x1={ox} y1={y} x2={ox+mapW} y2={y} stroke="#1a2535" strokeWidth="0.4" strokeDasharray="1.5,1.5"/>
-                  )}
-                  {[ox, ox+mapW*0.25, ox+mapW*0.5, ox+mapW*0.75, ox+mapW].map(x =>
-                    <line key={`v${x}`} x1={x} y1={oy} x2={x} y2={oy+mapH} stroke="#1a2535" strokeWidth="0.4" strokeDasharray="1.5,1.5"/>
-                  )}
-                  {/* Continental outline hint */}
-                  <rect x={ox} y={oy} width={mapW} height={mapH} fill="rgba(255,255,255,.015)" stroke="rgba(255,255,255,.04)" strokeWidth="0.3" rx="2"/>
-                  {/* Connection arcs */}
-                  {geoData.geo.map(g => {
-                    const c = coords[g.code]; if (!c) return null;
-                    const px = ox + mapW * c.x, py = oy + mapH * c.y;
-                    return <line key={`ln-${g.code}`} x1={cx} y1={cy} x2={px} y2={py} stroke={c.color} strokeWidth="0.3" opacity="0.2"/>;
-                  })}
-                  {/* Country markers */}
-                  {geoData.geo.map(g => {
-                    const c = coords[g.code]; if (!c) return null;
-                    const px = ox + mapW * c.x, py = oy + mapH * c.y;
-                    const r = 1.5 + (g.revenue / maxRev) * 5;
-                    return (
-                      <g key={g.code}>
-                        <circle cx={px} cy={py} r={r*2.5} fill={c.color} opacity="0.06"/>
-                        <circle cx={px} cy={py} r={r*1.5} fill={c.color} opacity="0.15"/>
-                        <circle cx={px} cy={py} r={r} fill={c.color} opacity="0.85"/>
-                        <circle cx={px} cy={py} r="0.6" fill="#fff" opacity="0.5"/>
-                        <text x={px} y={py - r - 2} textAnchor="middle" fill="#e2e8f0" fontSize="2.8" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
-                        <text x={px} y={py - r + 2.5} textAnchor="middle" fill={c.color} fontSize="2.2" fontFamily="IBM Plex Mono,monospace" opacity="0.7">${Number(g.revenue).toFixed(0)}</text>
-                      </g>
-                    );
-                  })}
-                  {/* Flag labels row at bottom */}
-                  {geoData.geo.map((g, i) => {
-                    const c = coords[g.code]; if (!c) return null;
-                    const cols = Math.min(geoData.geo.length, 4);
-                    const row = Math.floor(i / cols);
-                    const col = i % cols;
-                    const fx = 10 + col * 22;
-                    const fy = 88 + row * 10;
-                    return (
-                      <g key={`fg-${g.code}`}>
-                        <text x={fx} y={fy} fontSize="3.5" fill={c.color}>{g.flag}</text>
-                        <text x={fx + 5} y={fy} fontSize="2.5" fill="#8892b0" fontFamily="IBM Plex Mono,monospace">{g.name}</text>
-                      </g>
-                    );
-                  })}
-                </svg>
-              );
-            })()}
+          <div style={{padding:"10px 14px"}}>
+            <svg viewBox="0 0 800 400" style={{width:"100%",height:"auto",display:"block"}}>
+              {/* Ocean bg */}
+              <rect width="800" height="400" fill="#080b12"/>
+              {/* Grid */}
+              {[50,100,150,200,250,300,350].map(y => <line key={`h${y}`} x1="0" y1={y} x2="800" y2={y} stroke="#111827" strokeWidth="0.5"/>)}
+              {[100,200,300,400,500,600,700].map(x => <line key={`v${x}`} x1={x} y1="0" x2={x} y2="400" stroke="#111827" strokeWidth="0.5"/>)}
+              {/* Simplified continent outlines */}
+              <g fill="#141a26" stroke="#1e293b" strokeWidth="0.8">
+                {/* North America */}
+                <path d="M95,175 Q100,85 150,60 Q200,55 230,70 Q260,85 250,120 Q240,155 220,170 Q200,185 180,195 Q150,210 130,200 Q110,190 95,175Z"/>
+                {/* South America */}
+                <path d="M215,210 Q230,200 245,210 Q260,230 265,260 Q268,300 260,330 Q250,355 240,360 Q228,355 225,330 Q218,290 215,250Z"/>
+                {/* Europe */}
+                <path d="M390,130 Q400,100 420,85 Q440,80 460,85 Q480,95 490,115 Q495,135 490,150 Q480,165 465,170 Q450,175 435,170 Q415,165 400,150Z"/>
+                {/* Africa */}
+                <path d="M395,180 Q410,170 430,172 Q450,175 460,190 Q470,215 472,245 Q474,280 470,310 Q465,335 455,345 Q440,348 430,340 Q418,320 412,290 Q405,255 398,220Z"/>
+                {/* Asia */}
+                <path d="M500,85 Q530,65 570,60 Q620,55 670,65 Q720,80 750,105 Q770,130 770,160 Q765,185 760,200 Q745,215 730,220 Q700,225 670,220 Q640,215 610,200 Q580,185 560,170 Q535,155 515,135 Q502,115 500,95Z"/>
+                {/* Australia */}
+                <path d="M720,280 Q735,270 755,272 Q775,275 785,290 Q790,310 785,325 Q775,338 760,340 Q745,338 735,325 Q725,310 720,295Z"/>
+                {/* UK/Ireland */}
+                <path d="M370,110 Q378,100 388,105 Q392,115 388,125 Q380,130 373,125 Q368,118 370,110Z"/>
+                {/* Japan */}
+                <path d="M770,95 Q778,90 782,98 Q785,110 782,120 Q776,128 770,122 Q767,112 770,95Z"/>
+                {/* Greenland */}
+                <path d="M295,55 Q310,45 330,50 Q340,60 335,75 Q325,82 310,80 Q298,72 295,62Z"/>
+                {/* Middle East (extra) */}
+                <path d="M485,165 Q498,158 510,162 Q518,170 515,182 Q505,190 495,188 Q485,180 485,165Z"/>
+                {/* India */}
+                <path d="M610,170 Q620,162 632,165 Q640,175 638,190 Q635,205 625,212 Q614,210 610,198 Q606,185 610,170Z"/>
+                {/* Southeast Asia */}
+                <path d="M675,190 Q685,182 695,185 Q702,195 700,208 Q692,215 682,212 Q675,205 675,190Z"/>
+              </g>
+              {/* Country highlights — cyan glow for active regions */}
+              {geoData.geo.map(g => {
+                const c = {
+                  MA: { x: 350, y: 275, label:"Morocco" },
+                  FR: { x: 430, y: 138, label:"France" },
+                  BE: { x: 440, y: 120, label:"Belgium" },
+                  NL: { x: 445, y: 112, label:"Netherlands" },
+                  DZ: { x: 380, y: 290, label:"Algeria" },
+                  TN: { x: 410, y: 272, label:"Tunisia" },
+                  AE: { x: 555, y: 230, label:"UAE" },
+                  SA: { x: 520, y: 235, label:"Saudi Arabia" },
+                }[g.code];
+                if (!c) return null;
+                const maxRev = Math.max(...geoData.geo.map(x => x.revenue), 1);
+                const intensity = 0.4 + (g.revenue / maxRev) * 0.6;
+                return (
+                  <g key={g.code}>
+                    <circle cx={c.x} cy={c.y} r="22" fill="#00e5ff" opacity={0.04 * intensity}/>
+                    <circle cx={c.x} cy={c.y} r="14" fill="#00e5ff" opacity={0.08 * intensity}/>
+                    <circle cx={c.x} cy={c.y} r="7" fill="#00e5ff" opacity={0.15 * intensity}/>
+                    <circle cx={c.x} cy={c.y} r="3" fill="#00e5ff" opacity={0.5 * intensity}/>
+                    <text x={c.x} y={c.y - 10} textAnchor="middle" fill="#e2e8f0" fontSize="9" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
+                    <text x={c.x} y={c.y + 12} textAnchor="middle" fill="#00e5ff" fontSize="8" fontFamily="IBM Plex Mono,monospace" opacity="0.8">● ${Number(g.revenue).toFixed(0)}</text>
+                  </g>
+                );
+              })}
+              {/* Legend */}
+              <rect x="16" y="372" width="200" height="20" rx="4" fill="rgba(8,11,18,.8)"/>
+              <text x="24" y="385" fill="#5a7080" fontSize="9" fontFamily="IBM Plex Mono,monospace">● Highlighted = active markets</text>
+            </svg>
           </div>
         </div>
       )}
 
-      {/* ── REVENUE BY SPONSOR (Cards) ────────────────────────────────────── */}
+      {/* ── REVENUE BY SPONSOR — HORIZONTAL CARDS ─────────────────────────── */}
       <div className="mb-6">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div className="sec-title" style={{marginBottom:0}}>Revenue by Sponsor (Live)</div>
@@ -765,42 +760,34 @@ function DashboardPage() {
           </span>}
         </div>
         {(sponsorBreakdown || []).length > 0 ? (
-          <div className="sp-grid">
+          <div style={{display:"flex",gap:14,overflowX:"auto",paddingBottom:8,scrollbarWidth:"thin"}}>
             {sponsorBreakdown.map(sp => {
               const maxRev = Math.max(...sponsorBreakdown.map(s => s.revenue || 0), 1);
               const pct = ((sp.revenue || 0) / maxRev * 100).toFixed(0);
               return (
-                <div key={sp.id} className="sp-card" style={{"--sc":sp.color,opacity:sp.status==="pending"?0.5:1}}>
-                  <div className="sp-top">
-                    <div>
-                      <div className="sp-name">{sp.name}</div>
-                      <div className="sp-meta">{sp.id}</div>
-                    </div>
-                    <span className={`badge badge-${sp.status==="connected"?"connected":sp.status==="pending"?"pending":"error"}`}>
-                      {sp.status?.toUpperCase() || "PENDING"}
-                    </span>
+                <div key={sp.id} style={{
+                  minWidth:200,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,
+                  padding:"14px 16px",flexShrink:0,position:"relative",overflow:"hidden"
+                }}>
+                  {/* Status dot top-right */}
+                  <span style={{
+                    position:"absolute",top:10,right:10,width:7,height:7,borderRadius:"50%",
+                    background:sp.status==="connected"?"#00e5ff":"var(--text2)",
+                    boxShadow:sp.status==="connected"?"0 0 6px #00e5ff":"none"
+                  }}/>
+                  {/* Name */}
+                  <div style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)",marginBottom:6,letterSpacing:.5}}>{sp.name}</div>
+                  {/* Revenue */}
+                  <div style={{fontSize:22,fontWeight:900,color:"#00e5ff",fontFamily:"IBM Plex Mono,monospace",letterSpacing:-1,marginBottom:6}}>
+                    ${Number(sp.revenue).toFixed(2)}
                   </div>
-                  <div className="sp-metrics">
-                    <div className="metric">
-                      <div className="metric-l">Revenue</div>
-                      <div className="metric-v" style={{color:sp.revenue>0?sp.color:"var(--text2)"}}>
-                        {sp.revenue > 0 ? `$${Number(sp.revenue).toFixed(2)}` : "$0.00"}
-                      </div>
-                    </div>
-                    <div className="metric">
-                      <div className="metric-l">Clicks</div>
-                      <div className="metric-v">{Number(sp.clicks).toLocaleString()}</div>
-                    </div>
-                    <div className="metric">
-                      <div className="metric-l">Leads</div>
-                      <div className="metric-v">{sp.leads}</div>
-                    </div>
+                  {/* Clicks + Leads */}
+                  <div style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)",marginBottom:12}}>
+                    {Number(sp.clicks).toLocaleString()} clicks · {sp.leads} leads
                   </div>
-                  <div className="prog-bar">
-                    <div className="prog-fill" style={{width:`${pct}%`,background:`linear-gradient(90deg,${sp.color},transparent)`}}/>
-                  </div>
-                  <div className="sp-last" style={{marginTop:8}}>
-                    {sp.last_sync ? `Synced ${new Date(sp.last_sync).toLocaleTimeString()}` : "Not synced"}
+                  {/* Progress bar */}
+                  <div style={{height:3,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#00e5ff,transparent)",borderRadius:2,transition:"width .8s ease"}}/>
                   </div>
                 </div>
               );
