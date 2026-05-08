@@ -66,6 +66,12 @@ export const api = {
   // AI Suggestions
   offerSuggestions: () => req("GET", "/ai/offer-suggestions"),
 
+  // Geo
+  geoDistribution: (from, to) => req("GET", `/stats/geo?from=${from||''}&to=${to||''}`),
+
+  // User Activity
+  userActivity: () => req("GET", "/stats/user-activity"),
+
   // Health
   health: () => req("GET", "/health"),
 };

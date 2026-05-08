@@ -18,8 +18,9 @@ const CSS = `
 :root{
   --bg:#07090c;--bg2:#0d1117;--bg3:#121820;--bg4:#161e28;
   --border:#1a2535;--border2:#243040;
-  --text:#cdd6e0;--text2:#5a7080;--text3:#8a9aaa;
+  --text:#e2e8f0;--text2:#8892b0;--text3:#a8b2d0;
   --green:#00ff9d;--cyan:#00cfff;--orange:#ff9f0a;--purple:#bf5af2;--red:#ff453a;
+  --green-dim:rgba(0,255,157,.12);--cyan-dim:rgba(0,207,255,.1);--orange-dim:rgba(255,159,10,.1);--purple-dim:rgba(191,90,242,.1);
   --font-mono:'IBM Plex Mono',monospace;
   --font-body:'Barlow',sans-serif;
 }
@@ -173,6 +174,25 @@ option{background:var(--bg3);}
 .test-ok{background:rgba(0,255,157,.08);color:var(--green);}
 .test-fail{background:rgba(255,69,58,.08);color:var(--red);}
 .test-loading{background:rgba(0,207,255,.08);color:var(--cyan);}
+
+/* Notification Panel */
+.notif-bell{position:relative;}
+.notif-count{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-family:var(--font-mono);font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;min-width:16px;text-align:center;line-height:1.4;border:2px solid var(--bg2);}
+.notif-panel{position:absolute;top:44px;right:0;width:360px;max-height:480px;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;box-shadow:0 12px 48px rgba(0,0,0,.6);z-index:100;overflow:hidden;animation:slideIn .2s ease;}
+.notif-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;}
+.notif-list{max-height:400px;overflow-y:auto;padding:0;}
+.notif-empty{padding:30px;text-align:center;font-size:11px;color:var(--text2);}
+.notif-item{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);transition:background .1s;}
+.notif-item:hover{background:rgba(255,255,255,.018);}
+.notif-item:last-child{border-bottom:none;}
+.notif-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+.notif-body{flex:1;min-width:0;}
+.notif-title{font-size:12px;font-weight:700;margin-bottom:2px;}
+.notif-time{font-family:var(--font-mono);font-size:9px;color:var(--text2);margin-top:2px;}
+
+/* Stat card hover */
+.stat-card{transition:transform .2s,box-shadow .2s!important;}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3);}
 
 /* ── CHAT ────────────────────────────────────────────────────────────────────── */
 .chat-layout{display:flex;background:var(--bg2)!important;}
@@ -423,29 +443,31 @@ function LoginPage({ onLogin }) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function DashboardPage() {
-  const [data,       setData]       = useState(null);
-  const [subData,      setSubData]      = useState(null);
-  const [subSyncing,   setSubSyncing]   = useState(false);
-  const [subSyncMsg,   setSubSyncMsg]   = useState("");
-  const [subSyncInfo,  setSubSyncInfo]  = useState(null);
-  const [err,        setErr]        = useState("");
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [pulse,      setPulse]      = useState(false);
-  const [showCal,    setShowCal]    = useState(false);
-  const [dateFrom,   setDateFrom]   = useState(() => {
+  const [data,        setData]        = useState(null);
+  const [subData,     setSubData]     = useState(null);
+  const [geoData,     setGeoData]     = useState(null);
+  const [userAct,     setUserAct]     = useState(null);
+  const [subSyncing,  setSubSyncing]  = useState(false);
+  const [subSyncMsg,  setSubSyncMsg]  = useState("");
+  const [subSyncInfo, setSubSyncInfo] = useState(null);
+  const [err,         setErr]         = useState("");
+  const [lastUpdate,  setLastUpdate]  = useState(null);
+  const [pulse,       setPulse]       = useState(false);
+  const [dateFrom,    setDateFrom]    = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0,10);
   });
-  const [dateTo,     setDateTo]     = useState(() => new Date().toISOString().slice(0,10));
-  const [selecting,  setSelecting]  = useState("from"); // "from" | "to"
-  const [calMonth,   setCalMonth]   = useState(() => new Date());
+  const [dateTo,      setDateTo]      = useState(() => new Date().toISOString().slice(0,10));
+  const [periodLabel, setPeriodLabel] = useState("Last 7 Days");
+  const [activePreset, setActivePreset] = useState("7d");
+  const [filterSponsor, setFilterSponsor] = useState("");
+  const [sponsors,    setSponsors]    = useState([]);
 
   const PRESETS = [
-    { label:"Today",         days:0  },
-    { label:"Yesterday",     days:1, yesterday:true },
-    { label:"Last 7 Days",   days:6  },
-    { label:"Last 30 Days",  days:29 },
-    { label:"This Month",    month:true },
-    { label:"Last Month",    lastMonth:true },
+    { id:"today",     label:"Today",        days:0 },
+    { id:"yesterday", label:"Yesterday",    days:1, yesterday:true },
+    { id:"7d",        label:"Last 7 Days",  days:6 },
+    { id:"mtd",       label:"MTD",          month:true },
+    { id:"custom",    label:"Custom Range", custom:true },
   ];
 
   const applyPreset = (p) => {
@@ -454,30 +476,57 @@ function DashboardPage() {
     if (p.yesterday) {
       const y = new Date(); y.setDate(y.getDate()-1);
       setDateFrom(fmt(y)); setDateTo(fmt(y));
+      setPeriodLabel("Yesterday");
     } else if (p.month) {
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
       setDateFrom(fmt(start)); setDateTo(fmt(today));
-    } else if (p.lastMonth) {
-      const start = new Date(today.getFullYear(), today.getMonth()-1, 1);
-      const end   = new Date(today.getFullYear(), today.getMonth(), 0);
-      setDateFrom(fmt(start)); setDateTo(fmt(end));
+      setPeriodLabel("Month to Date");
+    } else if (p.custom) {
+      return;
     } else {
       const from = new Date(); from.setDate(from.getDate() - p.days);
       setDateFrom(fmt(from)); setDateTo(fmt(today));
+      setPeriodLabel(p.label);
     }
-    setShowCal(false);
+    setActivePreset(p.id);
   };
 
   const load = useCallback(async () => {
     try {
-      const [d, sub, syncInfo] = await Promise.all([
+      // Calculate previous period for trend comparison
+      const rangeMs = new Date(dateTo).getTime() - new Date(dateFrom).getTime();
+      const prevTo = new Date(new Date(dateFrom).getTime() - 1).toISOString().slice(0, 10);
+      const prevFrom = new Date(new Date(dateFrom).getTime() - rangeMs).toISOString().slice(0, 10);
+
+      const [d, sub, syncInfo, sp, geo, prevDash, ua] = await Promise.all([
         api.dashboard(dateFrom, dateTo),
         api.subAffiliates(dateFrom, dateTo).catch(() => null),
         api.convSyncStatus().catch(() => null),
+        api.getSponsors().catch(() => ({ sponsors: [] })),
+        api.geoDistribution(dateFrom, dateTo).catch(() => null),
+        api.dashboard(prevFrom, prevTo).catch(() => null),
+        api.userActivity().catch(() => null),
       ]);
+
       setData(d);
+      setSponsors(sp.sponsors || []);
       if (sub) setSubData(sub);
+      if (geo) setGeoData(geo);
+      if (ua) setUserAct(ua);
       if (syncInfo) setSubSyncInfo(syncInfo);
+
+      // Calculate trends
+      if (d && prevDash) {
+        const cur = d.kpis;
+        const prev = prevDash.kpis;
+        d.trends = {
+          revenue: prev.totalRevenue > 0 ? ((cur.totalRevenue - prev.totalRevenue) / prev.totalRevenue * 100) : 0,
+          clicks:  prev.totalClicks  > 0 ? ((cur.totalClicks  - prev.totalClicks)  / prev.totalClicks  * 100) : 0,
+          leads:   prev.totalLeads   > 0 ? ((cur.totalLeads   - prev.totalLeads)   / prev.totalLeads   * 100) : 0,
+          sponsors: 0,
+        };
+      }
+
       setLastUpdate(new Date());
       setPulse(true);
       setTimeout(() => setPulse(false), 600);
@@ -486,24 +535,13 @@ function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Close calendar on outside click
-  useEffect(() => {
-    if (!showCal) return;
-    const close = (e) => { setShowCal(false); };
-    // Small delay so the toggle click doesn't immediately close it
-    const timer = setTimeout(() => {
-      document.addEventListener("click", close);
-    }, 50);
-    return () => { clearTimeout(timer); document.removeEventListener("click", close); };
-  }, [showCal]);
-
   // Listen to WebSocket for live updates
   useEffect(() => {
     const handler = (e) => {
       try {
         const msg = JSON.parse(e.data);
         if (msg.type === "dashboard_refresh" || msg.type === "sponsor_updated") {
-          load(); // refresh charts when sponsor synced
+          load();
         }
       } catch {}
     };
@@ -514,9 +552,8 @@ function DashboardPage() {
   if (err)   return <div className="err-box">⚠ {err} — Is the backend running?</div>;
   if (!data) return <div className="loader">⟳ Loading dashboard…</div>;
 
-  const { kpis, weeklyChart, topOffers } = data;
+  const { kpis, weeklyChart, topOffers, sponsorBreakdown, trends, dateRange } = data;
 
-  // Format chart data
   const chart = weeklyChart.map(r => ({
     day:     r.date?.slice(5) || r.date,
     revenue: +Number(r.revenue).toFixed(2),
@@ -524,129 +561,73 @@ function DashboardPage() {
     leads:   r.leads,
   }));
 
-  // Live revenue sparkline — last 7 points animated
-  const maxRev = Math.max(...chart.map(c => c.revenue), 1);
-
   return (
     <>
-      {/* Date Range Picker */}
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18,position:"relative"}}>
-        <button onClick={(e)=>{e.stopPropagation();setShowCal(p=>!p);}} style={{
-          display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",
-          border:"1px solid var(--border2)",borderRadius:8,padding:"8px 14px",
-          cursor:"pointer",color:"var(--text)",fontFamily:"var(--font-mono)",fontSize:11
-        }}>
-          📅 {dateFrom} → {dateTo}
-          <span style={{color:"var(--text2)",fontSize:10}}>
-            ({Math.round((new Date(dateTo)-new Date(dateFrom))/86400000)+1} days)
+      {/* ── TOP BAR: Title + Time + Live ───────────────────────────────────── */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span className="topbar-title" style={{fontSize:16,fontWeight:800,position:"static"}}>Overview Dashboard</span>
+          <span style={{width:7,height:7,borderRadius:"50%",background:"var(--green)",display:"inline-block",animation:"pulse 2s infinite"}}/>
+          <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>LIVE</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+            {lastUpdate?.toLocaleDateString()} - {lastUpdate?.toLocaleTimeString() || "—"}
           </span>
-        </button>
-        <button className="btn btn-sm" onClick={(e)=>{e.stopPropagation();load();}}>⟳ Apply</button>
-
-        {/* Calendar Dropdown */}
-        {showCal && (
-          <div onClick={e=>e.stopPropagation()} style={{
-            position:"absolute",top:44,left:0,zIndex:50,
-            background:"var(--bg2)",border:"1px solid var(--border2)",
-            borderRadius:12,padding:20,display:"flex",gap:20,
-            boxShadow:"0 8px 32px rgba(0,0,0,.6)",minWidth:520
-          }}>
-            {/* Presets */}
-            <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:110}}>
-              <div style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>Presets</div>
-              {PRESETS.map(p=>(
-                <button key={p.label} onClick={()=>applyPreset(p)} style={{
-                  background:"transparent",border:"none",color:"var(--text3)",
-                  textAlign:"left",cursor:"pointer",padding:"5px 8px",borderRadius:5,
-                  fontFamily:"var(--font-body)",fontSize:12,transition:"all .1s"
-                }} onMouseEnter={e=>e.target.style.background="var(--bg3)"}
-                   onMouseLeave={e=>e.target.style.background="transparent"}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Mini Calendar */}
-            <div>
-              {/* Month nav */}
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                <button onClick={()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()-1);setCalMonth(d);}} style={{background:"none",border:"none",color:"var(--text2)",cursor:"pointer",fontSize:16}}>‹</button>
-                <span style={{fontFamily:"var(--font-mono)",fontSize:11,fontWeight:700}}>
-                  {calMonth.toLocaleDateString("en",{month:"long",year:"numeric"}).toUpperCase()}
-                </span>
-                <button onClick={()=>{const d=new Date(calMonth);d.setMonth(d.getMonth()+1);setCalMonth(d);}} style={{background:"none",border:"none",color:"var(--text2)",cursor:"pointer",fontSize:16}}>›</button>
-              </div>
-              {/* Days header */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-                {["Mo","Tu","We","Th","Fr","Sa","Su"].map(d=>(
-                  <div key={d} style={{textAlign:"center",fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)",padding:"2px 0"}}>{d}</div>
-                ))}
-              </div>
-              {/* Calendar days */}
-              {(()=>{
-                const year  = calMonth.getFullYear();
-                const month = calMonth.getMonth();
-                const first = new Date(year, month, 1);
-                const startDow = (first.getDay()+6)%7; // Mon=0
-                const daysInMonth = new Date(year, month+1, 0).getDate();
-                const cells = [];
-                for (let i=0; i<startDow; i++) cells.push(null);
-                for (let d=1; d<=daysInMonth; d++) cells.push(d);
-                return (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
-                    {cells.map((d,i)=>{
-                      if (!d) return <div key={`e${i}`}/>;
-                      const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-                      const isFrom  = dateStr === dateFrom;
-                      const isTo    = dateStr === dateTo;
-                      const inRange = dateStr >= dateFrom && dateStr <= dateTo;
-                      const isToday = dateStr === new Date().toISOString().slice(0,10);
-                      return (
-                        <div key={d} onClick={()=>{
-                          if (selecting==="from") { setDateFrom(dateStr); if(dateStr>dateTo) setDateTo(dateStr); setSelecting("to"); }
-                          else { if(dateStr<dateFrom) { setDateFrom(dateStr); } else { setDateTo(dateStr); setShowCal(false); setSelecting("from"); } }
-                        }} style={{
-                          textAlign:"center",padding:"5px 0",borderRadius:5,cursor:"pointer",
-                          fontFamily:"var(--font-mono)",fontSize:11,
-                          background: isFrom||isTo ? "var(--green)" : inRange ? "rgba(0,255,157,.1)" : "transparent",
-                          color: isFrom||isTo ? "var(--bg)" : isToday ? "var(--green)" : "var(--text)",
-                          fontWeight: isFrom||isTo||isToday ? 700 : 400,
-                          outline: isToday && !isFrom && !isTo ? "1px solid rgba(0,255,157,.3)" : "none",
-                        }}>
-                          {d}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-              <div style={{marginTop:12,fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",textAlign:"center"}}>
-                {selecting==="from" ? "🟢 Select start date" : "🔵 Select end date"}
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* ── TIME RANGE TOGGLES ────────────────────────────────────────────── */}
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+        {PRESETS.map(p => (
+          <button key={p.id}
+            className="btn btn-sm"
+            style={activePreset === p.id ? {background:"var(--green)",color:"var(--bg)",borderColor:"var(--green)",fontWeight:700} : {}}
+            onClick={() => applyPreset(p)}
+          >{p.label}</button>
+        ))}
+        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",marginLeft:4}}>
+          {dateFrom} ~ {dateTo}
+        </span>
+        {/* Sponsor filter */}
+        <select className="form-input" style={{width:180,marginLeft:"auto",padding:"5px 10px",fontSize:11}}
+          value={filterSponsor} onChange={e => setFilterSponsor(e.target.value)}>
+          <option value="">All Sponsors</option>
+          {sponsors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <button className="btn btn-sm btn-primary" onClick={load}>Apply Filters</button>
+      </div>
+
+      {/* ── KPI CARDS with Trends ─────────────────────────────────────────── */}
       <div className="stats-grid mb-6">
         {[
-          { label:"Total Revenue",   value:`$${Number(kpis.totalRevenue).toLocaleString("en",{minimumFractionDigits:2})}`, color:"var(--green)"  },
-          { label:"Total Clicks",    value:Number(kpis.totalClicks).toLocaleString(),                                       color:"var(--cyan)"   },
-          { label:"Total Leads",     value:Number(kpis.totalLeads).toLocaleString(),                                        color:"var(--purple)" },
-          { label:"Active Sponsors", value:`${kpis.connectedApis}/${kpis.totalSponsors}`,                                  color:"var(--orange)" },
-        ].map((c,i) => (
-          <div key={i} className="stat-card" style={{"--ac":c.color,transition:"transform .2s",transform:pulse?"scale(1.01)":"scale(1)"}}>
-            <div className="stat-label">{c.label}</div>
-            <div className="stat-val" style={{color:c.color}}>{c.value}</div>
-            {lastUpdate && <div style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)",marginTop:4}}>
-              Updated {lastUpdate.toLocaleTimeString()}
-            </div>}
-          </div>
-        ))}
+          { label:"Total Revenue",   value:`$${Number(kpis.totalRevenue).toLocaleString("en",{minimumFractionDigits:3})}`, trend:trends?.revenue, color:"var(--green)",  fmt:"currency" },
+          { label:"Total Clicks",    value:Number(kpis.totalClicks).toLocaleString(),                                       trend:trends?.clicks,  color:"var(--cyan)",   fmt:"number"  },
+          { label:"Total Leads",     value:Number(kpis.totalLeads).toLocaleString(),                                        trend:trends?.leads,   color:"var(--purple)", fmt:"number"  },
+          { label:"Active Sponsors", value:`${kpis.connectedApis}/${kpis.totalSponsors}`,                                  trend:0,               color:"var(--orange)", fmt:"static"  },
+        ].map((c,i) => {
+          const isUp = (c.trend || 0) >= 0;
+          const trendColor = c.trend === 0 ? "var(--text2)" : isUp ? "var(--green)" : "var(--red)";
+          return (
+            <div key={i} className="stat-card" style={{"--ac":c.color,transition:"transform .2s",transform:pulse?"scale(1.01)":"scale(1)"}}>
+              <div className="stat-label">{c.label}</div>
+              <div className="stat-val" style={{color:c.color}}>{c.value}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5}}>
+                <span style={{fontSize:13,color:trendColor,fontWeight:700}}>
+                  {c.trend !== undefined && c.trend !== null ? (
+                    <>{isUp ? "▲" : "▼"} {Math.abs(c.trend).toFixed(1)}%</>
+                  ) : "—"}
+                </span>
+                <span style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)"}}>
+                  Updated {lastUpdate?.toLocaleTimeString()}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Charts */}
+      {/* ── CHARTS ROW ────────────────────────────────────────────────────── */}
       <div className="grid-2 mb-6">
         <div className="card">
           <div className="card-head">
@@ -696,39 +677,121 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* Revenue by Sponsor (Live) */}
-      {(data.sponsorBreakdown || []).filter(sp => sp.revenue > 0 || sp.clicks > 0).length > 0 && (
-        <>
-          <div className="sec-title">Revenue by Sponsor (Live)</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:22}}>
-            {(data.sponsorBreakdown || []).map(sp => (
-              <div key={sp.id} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 16px",opacity:sp.status==="pending"?.5:1}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:12,fontWeight:700}}>{sp.name}</span>
-                  <span style={{width:7,height:7,borderRadius:"50%",background:sp.color,display:"inline-block",boxShadow:sp.status==="connected"?`0 0 6px ${sp.color}55`:"none"}}/>
-                </div>
-                <div style={{fontFamily:"var(--font-mono)",fontSize:20,fontWeight:700,color:sp.revenue>0?sp.color:"var(--text2)"}}>
-                  {sp.revenue > 0 ? `$${Number(sp.revenue).toFixed(2)}` : sp.status==="pending" ? "No key" : "$0.00"}
-                </div>
-                <div style={{display:"flex",gap:12,marginTop:5}}>
-                  <span style={{fontSize:10,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>{Number(sp.clicks).toLocaleString()} clicks</span>
-                  <span style={{fontSize:10,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>{sp.leads} leads</span>
-                </div>
-                <div style={{marginTop:8,height:3,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}>
-                  <div style={{height:"100%",width:kpis.totalRevenue>0?`${(sp.revenue/kpis.totalRevenue*100).toFixed(1)}%`:"0%",background:sp.color,borderRadius:2,transition:"width .8s ease"}}/>
-                </div>
-              </div>
-            ))}
+      {/* ── GEOGRAPHIC DISTRIBUTION ───────────────────────────────────────── */}
+      {geoData?.geo?.length > 0 && (
+        <div className="card mb-6">
+          <div className="card-head">
+            <span className="card-title">Geographic Distribution</span>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+              {geoData.geo.reduce((s,g)=>s+g.conversions,0)} conversions
+            </span>
           </div>
-        </>
+          <div style={{padding:"14px 18px"}}>
+            {(() => {
+              const maxRev = Math.max(...geoData.geo.map(g => g.revenue), 1);
+              return geoData.geo.map((g, i) => {
+                const pct = (g.revenue / maxRev * 100).toFixed(0);
+                return (
+                  <div key={g.code} style={{display:"flex",alignItems:"center",gap:12,marginBottom:i < geoData.geo.length-1 ? 12 : 0}}>
+                    <span style={{fontSize:22,width:30,textAlign:"center"}}>{g.flag}</span>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontWeight:600,fontSize:13}}>{g.name}</span>
+                        <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:"var(--green)",fontWeight:700}}>${Number(g.revenue).toFixed(2)}</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{flex:1,height:5,background:"var(--bg3)",borderRadius:3,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${g.code==="MA"?"var(--green)":g.code==="FR"?"var(--cyan)":g.code==="BE"?"var(--orange)":"var(--purple)"},${g.code==="MA"?"#00ff9d":g.code==="FR"?"#00cfff":g.code==="BE"?"#ff9f0a":"#bf5af2"})`,borderRadius:3,transition:"width .8s ease"}}/>
+                        </div>
+                        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",minWidth:60}}>{g.conversions} conv</span>
+                        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",minWidth:50}}>{g.clicks} clk</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
       )}
 
+      {/* ── USER ACTIVITY + REVENUE BY SPONSOR row ────────────────────────── */}
+      <div className="grid-2 mb-6">
+        {/* User Activity */}
+        {userAct?.users?.length > 0 && (
+          <div className="card">
+            <div className="card-head">
+              <span className="card-title">User Activity</span>
+              <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+                {userAct.users.filter(u=>u.online).length} online
+              </span>
+            </div>
+            <div style={{padding:"6px 0"}}>
+              {userAct.users.map((u, i) => (
+                <div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:i<userAct.users.length-1?"1px solid var(--border)":"none"}}>
+                  <div style={{width:34,height:34,borderRadius:"50%",background:u.online?"linear-gradient(135deg,var(--green),var(--cyan))":"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:u.online?"var(--bg)":"var(--text2)",position:"relative"}}>
+                    {u.initials}
+                    {u.online && <span style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:"var(--green)",border:"2px solid var(--bg2)"}}/>}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{u.name}</div>
+                    <div style={{fontFamily:"var(--font-mono)",fontSize:10,color:u.online?"var(--green)":"var(--text2)"}}>
+                      {u.online ? "Active Now" : `Last seen ${u.lastSeen}`}
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:700,color:"var(--green)"}}>${u.revenue}</div>
+                    <div style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>{u.conversions} conv</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* Sub-Affiliate Leaderboard — auto-sync */}
-      <>
-        <div className="sec-title" style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <span>Sub-Affiliate Leaderboard</span>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {/* Revenue by Sponsor (Live) — condensed into right column */}
+        <div className="card">
+          <div className="card-head">
+            <span className="card-title">Revenue by Sponsor (Live)</span>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+              {sponsorBreakdown?.filter(s => s.revenue > 0).length || 0} active
+            </span>
+          </div>
+          <div style={{padding:"6px 0"}}>
+            {(sponsorBreakdown || []).map((sp, i) => {
+              const maxRev = Math.max(...sponsorBreakdown.map(s => s.revenue || 0), 1);
+              const pct = (sp.relevance || sp.revenue || 0) > 0 ? ((sp.revenue || 0) / maxRev * 100).toFixed(0) : 0;
+              return (
+                <div key={sp.id} style={{padding:"10px 16px",borderBottom:i<sponsorBreakdown.length-1?"1px solid var(--border)":"none",opacity:sp.status==="pending"?0.5:1}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:7,height:7,borderRadius:"50%",background:sp.color,display:"inline-block"}}/>
+                      <span style={{fontSize:13,fontWeight:600}}>{sp.name}</span>
+                    </div>
+                    <span style={{fontFamily:"var(--font-mono)",fontSize:15,fontWeight:700,color:sp.revenue>0?sp.color:"var(--text2)"}}>
+                      {sp.revenue > 0 ? `$${Number(sp.revenue).toFixed(2)}` : sp.status==="pending" ? "No key" : "$0.00"}
+                    </span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:sp.color,borderRadius:2,transition:"width .8s ease"}}/>
+                    </div>
+                    <span style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--text2)"}}>
+                      {Number(sp.clicks).toLocaleString()} clk · {sp.leads} ld
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── SUB-AFFILIATE LEADERBOARD ─────────────────────────────────────── */}
+      <div className="card mb-6">
+        <div className="card-head">
+          <span className="card-title">🏆 Sub-Affiliate Leaderboard</span>
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
             {subSyncInfo?.lastSync && (
               <span style={{fontSize:10,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>
                 Last sync: {new Date(subSyncInfo.lastSync).toLocaleTimeString()}
@@ -736,7 +799,7 @@ function DashboardPage() {
               </span>
             )}
             {subSyncMsg && <span style={{fontSize:11,color: subSyncMsg.startsWith("✓") ? "var(--green)" : "var(--orange)",fontFamily:"var(--font-mono)"}}>{subSyncMsg}</span>}
-            <button className="btn btn-sm" disabled={subSyncing} style={{fontSize:11}}
+            <button className="btn btn-sm" disabled={subSyncing} style={{fontSize:10}}
               onClick={async () => {
                 setSubSyncing(true); setSubSyncMsg("");
                 try {
@@ -751,71 +814,73 @@ function DashboardPage() {
             </button>
           </div>
         </div>
-        <div className="card">
-          {subData?.sub_affiliates?.length > 0 ? (
-            <div className="tbl-wrap">
-              <table>
-                <thead>
-                  <tr><th>#</th><th>Sub-Affiliate</th><th>ID</th><th>Leads</th><th>Revenue</th></tr>
-                </thead>
-                <tbody>
-                  {subData.sub_affiliates.map((s, i) => {
-                    const maxLeads = subData.sub_affiliates[0]?.leads || 1;
-                    const pct = maxLeads > 0 ? (s.leads / maxLeads * 100).toFixed(0) : 0;
-                    const medals = ["🥇","🥈","🥉"];
-                    return (
-                      <tr key={s.id}>
-                        <td style={{fontFamily:"var(--font-mono)",fontSize:14,width:32}}>{medals[i] || i+1}</td>
-                        <td style={{fontWeight:700,fontSize:13}}>{s.name}</td>
-                        <td><span className="offer-id">{s.id}</span></td>
-                        <td>
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <span className="mono" style={{color:"var(--cyan)",fontWeight:700,minWidth:30}}>{s.leads}</span>
-                            <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden",minWidth:60}}>
-                              <div style={{height:"100%",width:`${pct}%`,background:"var(--cyan)",borderRadius:2,transition:"width .6s ease"}}/>
-                            </div>
+        {subData?.sub_affiliates?.length > 0 ? (
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{width:36}}></th>
+                  <th>Sub-Affiliate</th>
+                  <th>ID</th>
+                  <th>Opens</th>
+                  <th>Clicks</th>
+                  <th>Leads</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subData.sub_affiliates.map((s, i) => {
+                  const trophies = ["🥇", "🥈", "🥉"];
+                  const maxLeads = subData.sub_affiliates[0]?.leads || 1;
+                  const barPct = (s.leads / maxLeads * 100).toFixed(0);
+                  return (
+                    <tr key={s.id}>
+                      <td style={{fontSize:18,textAlign:"center"}}>{trophies[i] || `#${i+1}`}</td>
+                      <td style={{fontWeight:700,fontSize:13}}>{s.name}</td>
+                      <td><span className="offer-id">{s.id}</span></td>
+                      <td className="mono">{s.opens || 0}</td>
+                      <td className="mono">{s.clicks || 0}</td>
+                      <td>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span className="mono" style={{color:"var(--cyan)",fontWeight:700,minWidth:28}}>{s.leads}</span>
+                          <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden",minWidth:50}}>
+                            <div style={{height:"100%",width:`${barPct}%`,background: trophies[i] ? `linear-gradient(90deg, #ffd700, #ffed4a)` : "var(--cyan)",borderRadius:2,transition:"width .6s ease"}}/>
                           </div>
-                        </td>
-                        <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(s.revenue).toFixed(2)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {subData?.total_in_db > 0 && (
-                <div style={{padding:"8px 16px",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-                  {subData.total_conversions} conversions in this period · {subData.total_in_db} total in DB
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{padding:"20px",textAlign:"center"}}>
-              <div style={{fontSize:13,color:"var(--text2)",marginBottom:8}}>
-                No conversions found for this period.
+                        </div>
+                      </td>
+                      <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(s.revenue).toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {subData?.total_in_db > 0 && (
+              <div style={{padding:"8px 16px",fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+                {subData.total_conversions} conversions in this period · {subData.total_in_db} total in DB
               </div>
-              <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>
-                Auto-sync runs every 15 min · Click "Sync Now" to fetch immediately
-              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{padding:"20px",textAlign:"center"}}>
+            <div style={{fontSize:13,color:"var(--text2)",marginBottom:8}}>
+              No conversions found for this period.
             </div>
-          )}
-        </div>
-      </>
-
-      {/* Live indicator */}
-      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,marginBottom:14}}>
-        <span style={{width:7,height:7,borderRadius:"50%",background:"var(--green)",display:"inline-block",animation:"pulse 2s infinite"}}/>
-        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-          LIVE — auto-refreshes every 2 min · last: {lastUpdate?.toLocaleTimeString() || "—"}
-        </span>
-        <button className="btn btn-sm" style={{marginLeft:"auto",fontSize:10}} onClick={load}>⟳ Refresh now</button>
+            <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>
+              Auto-sync runs every 15 min · Click "Sync Now" to fetch immediately
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Top Offers — date-filtered */}
+      {/* ── TOP OFFERS ────────────────────────────────────────────────────── */}
       {topOffers?.length > 0 && (
         <div className="card" style={{marginBottom:16}}>
           <div className="card-head">
-            <span className="card-title">Top Offers by Revenue</span>
-            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>période sélectionnée</span>
+            <span className="card-title">Top Offers by Revenue (Live)</span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>{periodLabel}</span>
+              <button className="btn btn-sm" style={{fontSize:10}} onClick={load}>⟳ Refresh now</button>
+            </div>
           </div>
           <div className="tbl-wrap">
             <table>
