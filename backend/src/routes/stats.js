@@ -157,7 +157,9 @@ router.get("/dashboard", async (req, res) => {
       .filter(o => sponsors.some(s => s.id === o.sponsor_id))
       .map(o => {
         const sp = spMap[o.sponsor_id];
-        const period = leadsByOffer[o.id] || leadsByOffer[o._id] || { leads: 0, revenue: 0 };
+        // Strip prefix from offer's DB ID to match conversion's raw offer_id
+        const rawOid = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
+        const period = leadsByOffer[rawOid] || leadsByOffer[o.id] || leadsByOffer[o._id] || { leads: 0, revenue: 0 };
         const leads = period.leads;
         const estRev = period.revenue || (o.payout * leads);
         return {
@@ -604,6 +606,48 @@ const GEO_META = {
   UA: { name: "Ukraine", flag: "🇺🇦" },
 };
 
+function extractCountryFromOfferName(name) {
+  if (!name) return "";
+  const m = String(name).match(/^([A-Za-z]{2})\s*-\s/);
+  return m ? countryToCode(m[1]) : "";
+}
+
+// ─── BACKFILL COUNTRY ON EXISTING CONVERSIONS ───────────────────────────────
+// POST /api/stats/backfill-geo — scans all conversions without country and fills from offer names
+router.post("/backfill-geo", async (req, res) => {
+  try {
+    const allOffers = await db.offers.find({});
+    const allConversions = await db.conversions.find({});
+    let updated = 0;
+    let skipped = 0;
+
+    for (const cv of allConversions) {
+      if (cv.country) { skipped++; continue; }
+      let code = "";
+
+      // Try matching offer_id to offers collection
+      if (cv.offer_id) {
+        for (const o of allOffers) {
+          const oid = o.id || o._id || "";
+          if (oid.endsWith(cv.offer_id) || oid === cv.offer_id) {
+            code = extractCountryFromOfferName(o.name);
+            if (code) break;
+          }
+        }
+      }
+
+      if (code) {
+        await db.conversions.update({ _id: cv._id }, { $set: { country: code } });
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+
+    res.json({ ok: true, updated, skipped, total: allConversions.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── GEOGRAPHIC DISTRIBUTION — uses real country from conversion data ─────────
 router.get("/geo", async (req, res) => {
   try {
@@ -616,25 +660,40 @@ router.get("/geo", async (req, res) => {
     const fromStart = fromDate + "T00:00:00.000Z";
     const conversions = await db.conversions.find({ created_at: { $gte: fromStart, $lte: toEnd } });
 
-    // Build offer lookup — match raw offer IDs to offer names
+    // Load all offers for lookups
     const allOffers = await db.offers.find({});
+
+    // Build lookup: raw ID → name AND full ID → name
     const offerLookup = {};
     for (const o of allOffers) {
-      const rawId = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
+      const fullId = o.id || o._id || "";
+      const rawId = fullId.replace(/^[A-Z0-9]+-/, "");
       if (rawId && o.name && !offerLookup[rawId]) offerLookup[rawId] = o.name;
+      if (fullId && o.name && !offerLookup[fullId]) offerLookup[fullId] = o.name;
     }
 
     const byCountry = {};
     for (const cv of conversions) {
       let code = countryToCode(cv.country);
-      // Fallback: extract country from offer name
+
+      // Fallback: extract country from offer name (keyed lookup)
       if (!code || !GEO_META[code]) {
         const offerName = offerLookup[cv.offer_id] || "";
-        const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
-        if (m) code = countryToCode(m[1]);
+        code = extractCountryFromOfferName(offerName);
       }
+
+      // Last resort: brute-force scan all offers for matching suffix
       if (!code || !GEO_META[code]) {
-        // Count as unknown (shown separately)
+        for (const o of allOffers) {
+          const oid = o.id || o._id || "";
+          if (cv.offer_id && (oid.endsWith(cv.offer_id) || oid === cv.offer_id)) {
+            code = extractCountryFromOfferName(o.name);
+            if (code) break;
+          }
+        }
+      }
+
+      if (!code || !GEO_META[code]) {
         if (!byCountry["__unknown"]) byCountry["__unknown"] = { code: "UN", name: "Unknown", flag: "🌍", revenue: 0, conversions: 0, clicks: 0 };
         byCountry["__unknown"].revenue += cv.revenue || 0;
         byCountry["__unknown"].conversions += 1;
@@ -648,8 +707,6 @@ router.get("/geo", async (req, res) => {
     const geo = Object.values(byCountry).sort((a, b) => b.revenue - a.revenue);
     const totalRev = geo.reduce((s, g) => s + g.revenue, 0) || 1;
     for (const g of geo) g.clicks = Math.round((g.revenue / totalRev) * 120 + Math.random() * 15);
-
-    // Compute opens from clicks
     for (const g of geo) g.opens = Math.round((g.clicks || 0) * 2.8);
 
     res.json({ geo });
