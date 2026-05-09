@@ -480,6 +480,7 @@ function DashboardPage() {
       setDateFrom(fmt(start)); setDateTo(fmt(today));
       setPeriodLabel("Month to Date");
     } else if (p.custom) {
+      setActivePreset("custom");
       return;
     } else {
       const from = new Date(); from.setDate(from.getDate() - p.days);
@@ -582,8 +583,19 @@ function DashboardPage() {
             onClick={() => applyPreset(p)}
           >{p.label}</button>
         ))}
-        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",marginLeft:4}}>
-          {dateFrom} ~ {dateTo}
+        {activePreset === "custom" && (
+          <>
+            <input type="date" className="form-input" style={{width:140,padding:"4px 8px",fontSize:11}}
+              value={dateFrom} onChange={e => { setDateFrom(e.target.value); setActivePreset("custom"); }}
+              max={dateTo}/>
+            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>~</span>
+            <input type="date" className="form-input" style={{width:140,padding:"4px 8px",fontSize:11}}
+              value={dateTo} onChange={e => { setDateTo(e.target.value); setActivePreset("custom"); }}
+              min={dateFrom} max={new Date().toISOString().slice(0,10)}/>
+          </>
+        )}
+        <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)",marginLeft:activePreset==="custom"?0:4}}>
+          {activePreset !== "custom" ? `${dateFrom} ~ ${dateTo}` : ""}
         </span>
         {/* Sponsor filter */}
         <select className="form-input" style={{width:180,marginLeft:"auto",padding:"5px 10px",fontSize:11}}
