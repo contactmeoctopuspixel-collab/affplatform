@@ -522,6 +522,8 @@ function DashboardPage() {
   const [filterSponsor, setFilterSponsor] = useState("");
   const [sponsors,    setSponsors]    = useState([]);
   const [geoMetric,   setGeoMetric]   = useState("leads");
+  const [tooltip,      setTooltip]      = useState("");
+  const [tooltipPos,   setTooltipPos]   = useState({ x: 0, y: 0 });
 
   const PRESETS = [
     { id:"today",     label:"Today",        days:0 },
@@ -788,12 +790,12 @@ function DashboardPage() {
                     return geographies.map((geo) => {
                       // Match by numeric ID — works for ALL countries including US/AU/NZ
                       const geoNumericId = String(geo.id || "");
-                      const d = numericLookup[geoNumericId] || data.find(x => x.code === geo.id || x.code === geo.properties?.iso_a2);
+                      const d = numericLookup[geoNumericId];
                       
                       const actualMetric = geoMetric === "leads" ? "conversions" : geoMetric;
                       const metricVal = d ? (d[actualMetric] || 0) : 0;
-                      const maxMetric = Math.max(...(data || []).map(x => x[actualMetric] || 0), 1);
-                      const intensity = d && metricVal > 0 ? 0.3 + (metricVal / maxMetric) * 0.7 : 0;
+                      const maxMetric = Math.max(...geoData.geo.map(x => x[actualMetric] || 0), 1);
+                      const intensity = d && metricVal > 0 ? 0.2 + (metricVal / maxMetric) * 0.8 : 0;
                       
                       return (
                         <Geography
@@ -801,11 +803,16 @@ function DashboardPage() {
                           geography={geo}
                           onMouseEnter={() => {
                             const countryNameFromGeo = geo.properties?.name || "Unknown Region";
+                            const d = data.find((s) => String(ISO_ALPHA2_TO_NUMERIC[s.code]) === String(geo.id) || s.code === String(geo.id));
+                            const metricVal = d ? (geoMetric === "leads" ? d.conversions : d.revenue) : 0;
                             const label = d ? `${d.flag} ${d.name}` : `📍 ${countryNameFromGeo}`;
                             const valStr = geoMetric === "leads" ? `${metricVal} Leads` : `$${Number(metricVal).toFixed(2)}`;
-                            setTooltipContent(`${label} — ${valStr}`);
+                            setTooltip(`${label} — ${valStr}`);
                           }}
-                          onMouseLeave={() => setTooltipContent("")}
+                          onMouseMove={(e) => {
+                            setTooltipPos({ x: e.clientX, y: e.clientY });
+                          }}
+                          onMouseLeave={() => setTooltip("")}
                           style={{
                             default: {
                               fill: intensity > 0 ? `rgba(0, 255, 157, ${intensity})` : "var(--bg4)",
@@ -829,6 +836,28 @@ function DashboardPage() {
                 </Geographies>
               </ZoomableGroup>
             </ComposableMap>
+
+            {tooltip && (
+              <div style={{
+                position: "fixed",
+                top: tooltipPos.y + 15,
+                left: tooltipPos.x + 15,
+                background: "rgba(13,17,23,0.95)",
+                border: "1px solid var(--cyan)",
+                color: "#fff",
+                padding: "6px 12px",
+                borderRadius: 4,
+                fontSize: 12,
+                pointerEvents: "none",
+                zIndex: 9999,
+                fontFamily: "var(--font-mono)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                whiteSpace: "nowrap"
+              }}>
+                {tooltip}
+              </div>
+            )}
+
             <div style={{position:"absolute", bottom:16, left:16, pointerEvents:"none", display:"flex", gap:16}}>
               {geoData.geo.slice(0, 4).map(g => (
                 <div key={g.code} style={{display:"flex", alignItems:"center", gap:6, background:"rgba(13,17,23,0.8)", padding:"4px 8px", borderRadius:4, border:"1px solid var(--border2)"}}>
