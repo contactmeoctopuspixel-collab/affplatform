@@ -10,37 +10,54 @@ router.post("/backfill-geo", async (req, res) => {
   try {
     const conversions = await db.conversions.find({
       $or: [
-        { country: { $exists: false } },
-        { country: "" },
-        { country: "Unknown" },
-        { country: "UNKNOWN" }
+        { country: { $exists: false } }, { country: "" },
+        { country: "Unknown" }, { country: "UNKNOWN" }
       ]
     });
     
-    let updatedCount = 0;
     const offers = await db.offers.find({});
     const offerMap = {};
     offers.forEach(o => {
-      const fullId = o.external_id || (o.id && o.id !== o._id ? o.id : "");
-      if (fullId && o.name) offerMap[fullId] = o.name;
+      const rawId = (o.id || "").replace(/^[A-Z0-9]+-/, "");
+      if (rawId) offerMap[rawId] = { name: o.name, country: o.country };
+      if (o.external_id) offerMap[o.external_id] = { name: o.name, country: o.country };
     });
 
+    let updated = 0;
     for (const cv of conversions) {
-      const offerName = offerMap[cv.offer_id] || "";
-      const offerIdStr = String(cv.offer_id || "");
-      const sub3 = String(cv.sub3 || "");
+      const oMeta = offerMap[cv.offer_id] || { name: "", country: "" };
+      let code = oMeta.country;
+      if (!code) code = extractCountryFromOfferName(oMeta.name);
+      if (!code) code = countryToCode(cv.offer_id);
+      if (!code) code = countryToCode(cv.sub3);
       
-      let code = "";
-      if (offerName) code = extractCountryFromOfferName(offerName);
-      if (!code && offerIdStr) code = countryToCode(offerIdStr);
-      if (!code && sub3) code = countryToCode(sub3);
-
-      if (code && code !== "Unknown" && code !== "UNKNOWN") {
+      if (code && code.toUpperCase() !== "UNKNOWN") {
         await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });
-        updatedCount++;
+        updated++;
       }
     }
-    res.json({ success: true, checked: conversions.length, updated: updatedCount });
+    res.json({ success: true, checked: conversions.length, updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Deep Sync — pull last 90 days of conversions
+router.post("/sync-conversions-deep", async (req, res) => {
+  try {
+    const { syncConversions } = require("../services/conversionSync");
+    const d = (days) => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    
+    // Start background sync for multiple windows
+    const ranges = [
+      { from: d(30), to: d(0) },
+      { from: d(60), to: d(31) },
+      { from: d(90), to: d(61) }
+    ];
+    
+    for (const r of ranges) {
+      syncConversions(r.from, r.to).catch(e => console.error(e));
+    }
+    
+    res.json({ success: true, message: "90-day deep sync started in background." });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -204,10 +204,6 @@ async function saveConversions(rows, sponsorName) {
   let saved = 0;
   const newItems = [];
   for (const row of rows) {
-    const sub3 = getSub3(row);
-    const subId = parseInt(sub3, 10);
-    if (!subId || !SUB_NAMES[subId]) continue;
-
     const txId = String(
       row.transaction_id ?? row.conversion_id ?? row.id ?? row.click_id ?? ""
     ).trim();
