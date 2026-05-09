@@ -603,9 +603,10 @@ function countryToCode(raw) {
   }
   
   // 4. Fallback to common patterns
-  if (v.startsWith("us") || v.endsWith("_us") || v.includes("-us")) return "US";
-  if (v.startsWith("au") || v.endsWith("_au") || v.includes("-au")) return "AU";
-  if (v.startsWith("nz") || v.endsWith("_nz") || v.includes("-nz")) return "NZ";
+  if (v.startsWith("us") || v.endsWith("_us") || v.includes("-us") || v.includes(".us.") || v.includes(" usa")) return "US";
+  if (v.startsWith("au") || v.endsWith("_au") || v.includes("-au") || v.includes(".au.") || v.includes(" australia")) return "AU";
+  if (v.startsWith("nz") || v.endsWith("_nz") || v.includes("-nz") || v.includes(".nz.") || v.includes(" new zealand")) return "NZ";
+  if (v.startsWith("uk") || v.endsWith("_uk") || v.includes("-uk") || v.includes(" gb") || v.includes(" united kingdom")) return "GB";
 
   // 5. Fallback to first 2 chars if they form a known code
   const fallback = v.slice(0, 2).toUpperCase();

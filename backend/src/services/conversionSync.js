@@ -185,9 +185,10 @@ function extractOfferName(row) {
 }
 function extractCountry(row) {
   return String(
-    row.country ?? row.country_code ?? row.country_name ??
-    row.geo_country ?? row.geo?.country ?? row["geo.country"] ??
-    row.offer?.country ?? ""
+    row.country_code ?? row.country ?? row.country_name ??
+    row.geo_country ?? row.geo?.country ?? row.geo?.country_code ??
+    row["geo.country_code"] ?? row["relationship.geo.country_code"] ??
+    row.relationship?.geo?.country_code ?? row.offer?.country ?? ""
   ).trim();
 }
 

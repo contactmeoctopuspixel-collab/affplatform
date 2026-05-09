@@ -788,12 +788,12 @@ function DashboardPage() {
                     return geographies.map((geo) => {
                       // Match by numeric ID — works for ALL countries including US/AU/NZ
                       const geoNumericId = String(geo.id || "");
-                      const d = numericLookup[geoNumericId];
+                      const d = numericLookup[geoNumericId] || data.find(x => x.code === geo.id || x.code === geo.properties?.iso_a2);
                       
                       const actualMetric = geoMetric === "leads" ? "conversions" : geoMetric;
                       const metricVal = d ? (d[actualMetric] || 0) : 0;
-                      const maxMetric = Math.max(...geoData.geo.map(x => x[actualMetric] || 0), 1);
-                      const intensity = d && metricVal > 0 ? 0.2 + (metricVal / maxMetric) * 0.8 : 0;
+                      const maxMetric = Math.max(...(data || []).map(x => x[actualMetric] || 0), 1);
+                      const intensity = d && metricVal > 0 ? 0.3 + (metricVal / maxMetric) * 0.7 : 0;
                       
                       return (
                         <Geography
