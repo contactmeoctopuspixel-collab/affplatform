@@ -729,40 +729,61 @@ router.get("/geo", async (req, res) => {
       if (fullId && o.name && !offerLookup[fullId]) offerLookup[fullId] = o.name;
     }
 
+    // 2. Aggregate conversions by country
     const byCountry = {};
     for (const cv of conversions) {
-      let code = countryToCode(cv.country);
-
-      // Fallback: extract country from offer name (keyed lookup)
-      if (!code || !GEO_META[code]) {
-        const offerName = offerLookup[cv.offer_id] || "";
+      const offerName = offerLookup[cv.offer_id] || "";
+      const offerIdStr = String(cv.offer_id || "");
+      const sub3 = String(cv.sub3 || "");
+      
+      // Tiered Detection Logic
+      let code = "";
+      
+      // Tier 1: Raw country field (if not 'Unknown')
+      if (cv.country && cv.country !== "Unknown") {
+        code = countryToCode(cv.country);
+      }
+      
+      // Tier 2: Offer Name
+      if (!code && offerName) {
         code = extractCountryFromOfferName(offerName);
       }
-
-      // Last resort: brute-force scan all offers for matching suffix
-      if (!code || !GEO_META[code]) {
-        for (const o of allOffers) {
-          const oid = o.id || o._id || "";
-          if (cv.offer_id && (oid.endsWith(cv.offer_id) || oid === cv.offer_id)) {
-            code = extractCountryFromOfferName(o.name);
-            if (code) break;
-          }
-        }
+      
+      // Tier 3: Offer ID String (e.g. "500_US")
+      if (!code && offerIdStr) {
+        code = countryToCode(offerIdStr);
       }
-
-      if (!code || !GEO_META[code]) {
-        if (!byCountry["__unknown"]) byCountry["__unknown"] = { code: "UN", name: "Unknown", flag: "🌍", revenue: 0, conversions: 0, clicks: 0 };
-        byCountry["__unknown"].revenue += cv.revenue || 0;
-        byCountry["__unknown"].conversions += 1;
-        
-        // Debug logging for unknown countries
-        const offerName = offerLookup[cv.offer_id] || "Unknown Offer";
-        console.log(`[geo] UNKNOWN country for conversion. ID: ${cv.transaction_id}, OfferID: ${cv.offer_id}, OfferName: "${offerName}", rawCountry: "${cv.country}"`);
-        
+      
+      // Tier 4: Sub3 field (often contains the geo)
+      if (!code && sub3) {
+        code = countryToCode(sub3);
+      }
+      
+      // Final normalization
+      code = (code || "Unknown").toUpperCase();
+      
+      if (code === "UNKNOWN") {
+        if (!byCountry["Unknown"]) {
+          byCountry["Unknown"] = { code: "Unknown", name: "Unknown", flag: "🌍", revenue: 0, conversions: 0, clicks: 0 };
+        }
+        byCountry["Unknown"].revenue += Number(cv.revenue || 0);
+        byCountry["Unknown"].conversions += 1;
         continue;
       }
-      if (!byCountry[code]) byCountry[code] = { code, ...GEO_META[code], revenue: 0, conversions: 0, clicks: 0 };
-      byCountry[code].revenue += cv.revenue || 0;
+
+      if (!byCountry[code]) {
+        const meta = GEO_META[code] || { name: code, flag: "📍" };
+        byCountry[code] = { 
+          code, 
+          name: meta.name, 
+          flag: meta.flag, 
+          revenue: 0, 
+          conversions: 0, 
+          clicks: 0 
+        };
+      }
+      
+      byCountry[code].revenue += Number(cv.revenue || 0);
       byCountry[code].conversions += 1;
     }
 
