@@ -525,10 +525,15 @@ router.get("/hourly", async (req, res) => {
 });
 
 // ─── CONVERSION SYNC STATUS + MANUAL TRIGGER ──────────────────────────────────
-router.get("/conv-sync-status", (req, res) => {
+// Public sync route for maintenance — NON-BLOCKING to prevent timeouts
+router.post("/sync", async (req, res) => {
   try {
-    const { getConvSyncStatus } = require("../services/liveSync");
-    res.json(getConvSyncStatus());
+    // Start sync in background
+    syncAllOffers()
+      .then(r => console.log(`[sync] Finished background sync: ${r.totalImported} imported`))
+      .catch(e => console.error(`[sync] Background sync error: ${e.message}`));
+    
+    res.json({ success: true, message: "Offer synchronization started in background." });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -708,8 +713,8 @@ function extractCountryFromOfferName(name) {
 router.get("/geo", async (req, res) => {
   try {
     const today    = new Date().toISOString().slice(0, 10);
-    const weekAgo  = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
-    const fromDate = req.query.from || weekAgo;
+    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const fromDate = req.query.from || monthAgo;
     const toDate   = req.query.to   || today;
 
     const toEnd    = toDate   + "T23:59:59.999Z";
@@ -763,6 +768,11 @@ router.get("/geo", async (req, res) => {
       // Tier 4: Sub3 field (often contains the geo)
       if (!code && sub3) {
         code = countryToCode(sub3);
+      }
+      
+      // Tier 5: Sponsor Name (Fall-back)
+      if (!code && cv.sponsor) {
+        code = extractCountryFromOfferName(cv.sponsor);
       }
       
       // Final normalization

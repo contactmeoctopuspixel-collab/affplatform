@@ -5,12 +5,10 @@ const { authMiddleware, requireEditor } = require("../middleware/auth");
 const { syncAllOffers, syncOfferDetails } = require("../services/offersSync");
 const router = express.Router();
 
-// Public sync route for maintenance
-router.post("/sync", async (req, res) => {
+router.get("/conv-sync-status", (req, res) => {
   try {
-    const result = await syncAllOffers();
-    res.json({ success: true, ...result });
-    syncOfferDetails().catch(e => console.error(e));
+    const { getConvSyncStatus } = require("../services/liveSync");
+    res.json(getConvSyncStatus());
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
