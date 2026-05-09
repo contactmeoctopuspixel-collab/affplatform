@@ -34,6 +34,18 @@ router.post("/backfill-geo", async (req, res) => {
       if (code && code.toUpperCase() !== "UNKNOWN") {
         await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });
         updated++;
+      } else {
+        // Final desperate attempt: check for [US], (AU), _NZ etc in offer name
+        const n = (oMeta.name || "").toLowerCase();
+        let desperateCode = "";
+        if (n.includes("[us]") || n.includes("(us)") || n.includes("_us")) desperateCode = "US";
+        else if (n.includes("[au]") || n.includes("(au)") || n.includes("_au")) desperateCode = "AU";
+        else if (n.includes("[nz]") || n.includes("(nz)") || n.includes("_nz")) desperateCode = "NZ";
+        
+        if (desperateCode) {
+           await db.conversions.update({ _id: cv._id }, { $set: { country: desperateCode } });
+           updated++;
+        }
       }
     }
     res.json({ success: true, checked: conversions.length, updated });

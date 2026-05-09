@@ -228,14 +228,20 @@ async function saveConversions(rows, sponsorName) {
     let country = countryToCode(rawCountry);
 
     if (!country && offerName) {
-      // Sort keys by length descending to match longer names first
-      const sortedKeys = Object.keys(COUNTRY_NAME_MAP).sort((a, b) => b.length - a.length);
-      const lowOfferName = offerName.toLowerCase();
-      for (const key of sortedKeys) {
-        const regex = new RegExp(`(^|[^a-z])${key.replace('.', '\\.')}([^a-z]|$)`, 'i');
-        if (regex.test(lowOfferName)) {
-          country = COUNTRY_NAME_MAP[key];
-          break;
+      // Aggressive scanning for US/AU/NZ variants
+      const v = offerName.toLowerCase();
+      if (v.includes("united states") || v.includes(" usa") || v.includes("[us]") || v.includes("_us")) country = "US";
+      else if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au")) country = "AU";
+      else if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz")) country = "NZ";
+      else {
+        // Sort keys by length descending to match longer names first
+        const sortedKeys = Object.keys(COUNTRY_NAME_MAP).sort((a, b) => b.length - a.length);
+        for (const key of sortedKeys) {
+          const regex = new RegExp(`(^|[^a-z])${key.replace('.', '\\.')}([^a-z]|$)`, 'i');
+          if (regex.test(v)) {
+            country = COUNTRY_NAME_MAP[key];
+            break;
+          }
         }
       }
     }
