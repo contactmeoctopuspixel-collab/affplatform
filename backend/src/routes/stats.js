@@ -814,9 +814,10 @@ router.get("/geo", async (req, res) => {
     // 2. Aggregate conversions by country
     const byCountry = {};
     for (const cv of conversions) {
-      const oMeta = offerLookup[cv.offer_id] || { name: "", country: "" };
-      const offerName = oMeta.name;
-      const offerIdStr = String(cv.offer_id || "");
+      const oid = String(cv.offer_id || "");
+      const oMeta = offerLookup[oid] || { name: cv.offer_name || "", country: "" };
+      const offerName = oMeta.name || cv.offer_name || "";
+      const offerIdStr = oid;
       const sub3 = String(cv.sub3 || "");
       
       // Tiered Detection Logic

@@ -858,8 +858,8 @@ function DashboardPage() {
               </div>
             )}
 
-            <div style={{position:"absolute", bottom:16, left:16, pointerEvents:"none", display:"flex", gap:16}}>
-              {geoData.geo.slice(0, 4).map(g => (
+            <div style={{position:"absolute", bottom:16, left:16, pointerEvents:"none", display:"flex", flexWrap:"wrap", gap:12, maxWidth:"85%"}}>
+              {geoData.geo.slice(0, 8).map(g => (
                 <div key={g.code} style={{display:"flex", alignItems:"center", gap:6, background:"rgba(13,17,23,0.8)", padding:"4px 8px", borderRadius:4, border:"1px solid var(--border2)"}}>
                   <span style={{fontSize:14}}>{g.flag}</span>
                   <div style={{display:"flex", flexDirection:"column"}}>
