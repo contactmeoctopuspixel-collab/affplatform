@@ -143,14 +143,21 @@ router.get("/dashboard", async (req, res) => {
     const toDate   = req.query.to   || today;
     const fromStart = fromDate + "T00:00:00.000Z";
     const toEnd    = toDate   + "T23:59:59.999Z";
-    const filterSponsor = req.query.sponsor;
+    const filterSponsorParam = req.query.sponsor;
+
+    // Resolve filterSponsor to a NAME if it's an ID
+    let filterSponsorName = filterSponsorParam;
+    if (filterSponsorParam) {
+      const sp = sponsors.find(s => s.id === filterSponsorParam || s.name === filterSponsorParam);
+      if (sp) filterSponsorName = sp.name;
+    }
 
     // ── Fetch real stats per sponsor from Everflow API ────────────────────────
     let totalRevenue = 0, totalClicks = 0, totalLeads = 0;
     const sponsorBreakdownMap = {};
 
-    const filteredSponsors = filterSponsor 
-      ? sponsors.filter(s => s.name === filterSponsor || s.id === filterSponsor)
+    const filteredSponsors = filterSponsorName 
+      ? sponsors.filter(s => s.name === filterSponsorName)
       : sponsors;
 
     for (const sp of filteredSponsors) {
@@ -402,11 +409,17 @@ router.get("/sub-affiliates", async (req, res) => {
 
     const toEnd    = toDate   + "T23:59:59.999Z";
     const fromStart = fromDate + "T00:00:00.000Z";
-    const filterSponsor = req.query.sponsor;
+    const filterSponsorParam = req.query.sponsor;
+
+    let filterSponsorName = filterSponsorParam;
+    if (filterSponsorParam) {
+      const sp = await db.sponsors.findOne({ $or: [{ id: filterSponsorParam }, { name: filterSponsorParam }] });
+      if (sp) filterSponsorName = sp.name;
+    }
 
     // Fetch conversions (leads) and click events for the period
     const convQuery = { created_at: { $gte: fromStart, $lte: toEnd } };
-    if (filterSponsor) convQuery.sponsor = filterSponsor;
+    if (filterSponsorName) convQuery.sponsor = filterSponsorName;
 
     const conversions = await db.conversions.find(convQuery);
     
@@ -707,7 +720,7 @@ const COUNTRY_NAME_MAP = {
   "taiwan": "TW", "tw": "TW", "hong kong": "HK", "hk": "HK",
   "singapore": "SG", "sg": "SG", "malaysia": "MY", "my": "MY",
   "thailand": "TH", "th": "TH", "vietnam": "VN", "vn": "VN",
-  "philippines": "PH", "ph": "PH", "indonesia": "ID", "id": "ID",
+  "indonesia": "ID", "id": "ID",
   "argentina": "AR", "ar": "AR", "colombia": "CO", "co": "CO",
   "chile": "CL", "cl": "CL", "peru": "PE", "pe": "PE",
 };
@@ -857,10 +870,16 @@ router.get("/geo", async (req, res) => {
 
     const toEnd    = toDate   + "T23:59:59.999Z";
     const fromStart = fromDate + "T00:00:00.000Z";
-    const filterSponsor = req.query.sponsor;
+    const filterSponsorParam = req.query.sponsor;
+
+    let filterSponsorName = filterSponsorParam;
+    if (filterSponsorParam) {
+      const sp = await db.sponsors.findOne({ $or: [{ id: filterSponsorParam }, { name: filterSponsorParam }] });
+      if (sp) filterSponsorName = sp.name;
+    }
 
     const query = { created_at: { $gte: fromStart, $lte: toEnd } };
-    if (filterSponsor) query.sponsor = filterSponsor;
+    if (filterSponsorName) query.sponsor = filterSponsorName;
 
     const conversions = await db.conversions.find(query);
 
@@ -919,7 +938,7 @@ router.get("/geo", async (req, res) => {
         const forensicStr = (String(cv._id || "") + String(cv.transaction_id || "") + String(cv.offer_name || "") + String(cv.sponsor || "")).toLowerCase();
         const rawCountry = String(cv.country || "").toUpperCase();
 
-        if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance") || rawCountry === "PH") code = "AU";
+        if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance") || rawCountry === "PH" || rawCountry.includes("PHILIPPINES")) code = "AU";
         else if (forensicStr.includes("nz") || forensicStr.includes("new zealand") || forensicStr.includes("cloud storage")) code = "NZ";
         else if (forensicStr.includes("us") || forensicStr.includes("united states")) code = "US";
       }
