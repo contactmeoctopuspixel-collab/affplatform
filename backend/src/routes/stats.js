@@ -374,30 +374,31 @@ router.post("/import-conversions", async (req, res) => {
         const sub3 = String(row.sub3 || row.sub_id_3 || "");
         const revenue = parseFloat(row.revenue || row.payout || 0);
         const createdAt = row.conversion_date || row.created_at || new Date().toISOString();
+        const rawOid = String(row.offer_id ?? row.network_offer_id ?? row.offer?.id ?? row["offer.id"] ?? "");
+        const offerName = String(row.offer_name ?? row.offer?.name ?? row.name ?? "");
+        const rawCountry = String(row.country ?? row.country_code ?? row.country_name ?? row.geo_country ?? row.offer?.country ?? "");
 
         const exists = await db.conversions.findOne({ transaction_id: txId });
         if (exists) {
-          // Backfill country if missing
           if (!exists.country) {
-            const c = countryToCode(row.country || row.country_code || row.country_name || "");
-            if (c) await db.conversions.update({ _id: exists._id }, { $set: { country: c } });
+            const c = countryToCode(rawCountry);
+            if (!c && offerName) {
+              const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
+              if (m) { const cc = countryToCode(m[1]); if (cc) await db.conversions.update({ _id: exists._id }, { $set: { country: cc } }); }
+            } else if (c) {
+              await db.conversions.update({ _id: exists._id }, { $set: { country: c } });
+            }
           }
           continue;
         }
-        let country = countryToCode(row.country || row.country_code || row.country_name || "");
-        if (!country) {
-          const rawOid = String(row.offer_id ?? row.network_offer_id ?? "");
-          if (rawOid) {
-            const offerRow = await db.offers.findOne({ id: { $regex: rawOid + "$" } }) || await db.offers.findOne({ _id: { $regex: rawOid + "$" } });
-            if (offerRow?.name) {
-              const m = String(offerRow.name).match(/^([A-Za-z]{2})\s*-\s/);
-              if (m) country = countryToCode(m[1]);
-            }
-          }
+        let country = countryToCode(rawCountry);
+        if (!country && offerName) {
+          const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
+          if (m) country = countryToCode(m[1]);
         }
         await db.conversions.insert({
           _id: txId, transaction_id: txId,
-          sub3, revenue, offer_id: String(row.offer_id || row.network_offer_id || ""),
+          sub3, revenue, offer_id: rawOid,
           sponsor: sp.name, event_type: "cv", country,
           created_at: new Date(createdAt).toISOString(),
         });
@@ -615,23 +616,19 @@ router.get("/geo", async (req, res) => {
     const fromStart = fromDate + "T00:00:00.000Z";
     const conversions = await db.conversions.find({ created_at: { $gte: fromStart, $lte: toEnd } });
 
-    // Build offer lookup: offer DB has composite IDs like "SP001-104817",
-    // but conversion stores raw offer_id like "104817". Match by suffix.
+    // Build offer lookup — match raw offer IDs to offer names
     const allOffers = await db.offers.find({});
     const offerLookup = {};
     for (const o of allOffers) {
-      const rawId = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, ""); // strip prefix
-      if (rawId && o.name) {
-        if (!offerLookup[rawId]) offerLookup[rawId] = o.name;
-      }
+      const rawId = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
+      if (rawId && o.name && !offerLookup[rawId]) offerLookup[rawId] = o.name;
     }
 
     const byCountry = {};
     for (const cv of conversions) {
-      // 1. Try stored country field
       let code = countryToCode(cv.country);
-      // 2. Fallback: extract country from offer name (e.g. "US - ...", "NO - ...")
-      if ((!code || !GEO_META[code]) && cv.offer_id) {
+      // Fallback: extract country from offer name
+      if (!code || !GEO_META[code]) {
         const offerName = offerLookup[cv.offer_id] || "";
         const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
         if (m) code = countryToCode(m[1]);

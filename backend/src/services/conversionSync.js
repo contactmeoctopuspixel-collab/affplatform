@@ -140,6 +140,28 @@ async function detectAndFetch(apiKey, from, to) {
   return null;
 }
 
+// Extract values from conversion rows (Everflow uses different formats)
+function extractOfferId(row) {
+  return String(
+    row.offer_id ?? row.network_offer_id ?? row["offer.id"] ??
+    row.offer?.id ?? row.offer_id?.id ?? row.offer?._id ??
+    ""
+  ).trim();
+}
+function extractOfferName(row) {
+  return String(
+    row.offer_name ?? row.offer?.name ?? row.name ?? row["offer.name"] ??
+    row.offer_name?.name ?? ""
+  ).trim();
+}
+function extractCountry(row) {
+  return String(
+    row.country ?? row.country_code ?? row.country_name ??
+    row.geo_country ?? row.geo?.country ?? row["geo.country"] ??
+    row.offer?.country ?? ""
+  ).trim();
+}
+
 // Save conversions to DB, skip duplicates — returns { saved, newItems }
 async function saveConversions(rows, sponsorName) {
   // Build offer name lookup (raw offer ID → name)
@@ -173,13 +195,19 @@ async function saveConversions(rows, sponsorName) {
       } catch { createdAt = new Date().toISOString(); }
     }
 
-    // Extract country: 1) from API fields, 2) from offer name in our DB
-    let rawCountry = String(row.country || row.country_code || row.country_name || "").trim();
-    if (!rawCountry) {
-      const rawOid = String(row.offer_id ?? row.network_offer_id ?? "");
-      const offerName = offerNameByRawId[rawOid];
-      if (offerName) {
-        const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
+    const rawOid = extractOfferId(row);
+    const offerName = extractOfferName(row);
+
+    // Extract country: 1) from API fields, 2) from offer name in API, 3) from offer name in DB
+    let rawCountry = extractCountry(row);
+    if (!rawCountry && offerName) {
+      const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
+      if (m) rawCountry = m[1];
+    }
+    if (!rawCountry && rawOid) {
+      const dbOfferName = offerNameByRawId[rawOid];
+      if (dbOfferName) {
+        const m = dbOfferName.match(/^([A-Za-z]{2})\s*-\s/);
         if (m) rawCountry = m[1];
       }
     }
@@ -196,7 +224,7 @@ async function saveConversions(rows, sponsorName) {
     await db.conversions.insert({
       _id: txId, transaction_id: txId,
       sub3: String(subId), revenue,
-      offer_id: String(row.offer_id ?? row.network_offer_id ?? ""),
+      offer_id: rawOid,
       sponsor: sponsorName, event_type: "cv", country,
       created_at: createdAt,
     });
