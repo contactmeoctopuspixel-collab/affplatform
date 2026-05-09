@@ -988,8 +988,8 @@ function DashboardPage() {
               <tbody>
                 {subData?.sub_affiliates?.length > 0 ? subData.sub_affiliates.map((s, i) => {
                   const trophies = ["🥇", "🥈", "🥉"];
-                  const maxScore = Math.max(...subData.sub_affiliates.map(x => Math.max(x.leads||0, x.clicks||0, x.opens||0)), 1);
-                  const barVal = Math.max(s.leads||0, s.clicks||0, s.opens||0);
+                  const maxScore = Math.max(...subData.sub_affiliates.map(x => x.leads || 0), 1);
+                  const barVal = s.leads || 0;
                   const barPct = (barVal / maxScore * 100).toFixed(0);
                   return (
                     <tr key={s.id}>
