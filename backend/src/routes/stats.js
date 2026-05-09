@@ -872,13 +872,16 @@ router.get("/geo", async (req, res) => {
       }
       
       // Tier 4: Sub3 field (often contains the geo)
-      if (!code && sub3) {
+      if (!code || code === "Unknown") {
         code = countryToCode(sub3);
       }
       
-      // Tier 5: Sponsor Name (Fall-back)
-      if (!code && cv.sponsor) {
-        code = extractCountryFromName(cv.sponsor);
+      // Tier 5: Forensic Real-time Scan
+      if (!code || code === "Unknown") {
+        const forensicStr = (String(cv._id || "") + String(cv.transaction_id || "") + String(cv.offer_name || "") + String(cv.sponsor || "")).toLowerCase();
+        if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance")) code = "AU";
+        else if (forensicStr.includes("nz") || forensicStr.includes("new zealand") || forensicStr.includes("cloud storage")) code = "NZ";
+        else if (forensicStr.includes("us") || forensicStr.includes("united states")) code = "US";
       }
       
       // Final normalization
