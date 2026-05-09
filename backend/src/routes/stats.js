@@ -673,35 +673,39 @@ function extractCountryFromOfferName(name) {
 // POST /api/stats/backfill-geo — scans all conversions without country and fills from offer names
 router.post("/backfill-geo", async (req, res) => {
   try {
-    const allOffers = await db.offers.find({});
-    const allConversions = await db.conversions.find({});
-    let updated = 0;
-    let skipped = 0;
+    const conversions = await db.conversions.find({
+      $or: [
+        { country: { $exists: false } },
+        { country: "" },
+        { country: "Unknown" },
+        { country: "UNKNOWN" }
+      ]
+    });
+    
+    let updatedCount = 0;
+    const offers = await db.offers.find({});
+    const offerMap = {};
+    offers.forEach(o => {
+      const fullId = o.external_id || (o.id && o.id !== o._id ? o.id : "");
+      if (fullId && o.name) offerMap[fullId] = o.name;
+    });
 
-    for (const cv of allConversions) {
-      if (cv.country) { skipped++; continue; }
+    for (const cv of conversions) {
+      const offerName = offerMap[cv.offer_id] || "";
+      const offerIdStr = String(cv.offer_id || "");
+      const sub3 = String(cv.sub3 || "");
+      
       let code = "";
+      if (offerName) code = extractCountryFromOfferName(offerName);
+      if (!code && offerIdStr) code = countryToCode(offerIdStr);
+      if (!code && sub3) code = countryToCode(sub3);
 
-      // Try matching offer_id to offers collection
-      if (cv.offer_id) {
-        for (const o of allOffers) {
-          const oid = o.id || o._id || "";
-          if (oid.endsWith(cv.offer_id) || oid === cv.offer_id) {
-            code = extractCountryFromOfferName(o.name);
-            if (code) break;
-          }
-        }
-      }
-
-      if (code) {
-        await db.conversions.update({ _id: cv._id }, { $set: { country: code } });
-        updated++;
-      } else {
-        skipped++;
+      if (code && code !== "Unknown" && code !== "UNKNOWN") {
+        await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });
+        updatedCount++;
       }
     }
-
-    res.json({ ok: true, updated, skipped, total: allConversions.length });
+    res.json({ success: true, checked: conversions.length, updated: updatedCount });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

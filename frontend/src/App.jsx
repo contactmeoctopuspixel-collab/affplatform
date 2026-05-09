@@ -799,13 +799,28 @@ function DashboardPage() {
                         <Geography
                           key={geo.rsmKey}
                           geography={geo}
-                          fill={intensity > 0 ? `rgba(0, 255, 255, ${intensity})` : "#2a3441"}
-                          stroke={intensity > 0 ? "#00ffff" : "#1a2535"}
-                          strokeWidth={intensity > 0 ? 0.8 : 0.5}
+                          onMouseEnter={() => {
+                            const countryNameFromGeo = geo.properties?.name || "Unknown Region";
+                            const label = d ? `${d.flag} ${d.name}` : `📍 ${countryNameFromGeo}`;
+                            const valStr = geoMetric === "leads" ? `${metricVal} Leads` : `$${Number(metricVal).toFixed(2)}`;
+                            setTooltipContent(`${label} — ${valStr}`);
+                          }}
+                          onMouseLeave={() => setTooltipContent("")}
                           style={{
-                            default: { outline: "none" },
-                            hover:   { fill: "#00ff9d", stroke: "#00ff9d", strokeWidth: 1, outline: "none", cursor: "pointer" },
-                            pressed: { outline: "none" },
+                            default: {
+                              fill: intensity > 0 ? `rgba(0, 255, 157, ${intensity})` : "var(--bg4)",
+                              outline: "none",
+                              stroke: "var(--border)",
+                              strokeWidth: 0.5
+                            },
+                            hover: {
+                              fill: "var(--cyan)",
+                              outline: "none",
+                              cursor: "pointer",
+                              stroke: "#fff",
+                              strokeWidth: 1
+                            },
+                            pressed: { fill: "var(--purple)", outline: "none" }
                           }}
                         />
                       );
