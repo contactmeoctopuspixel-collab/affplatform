@@ -12,22 +12,17 @@ router.get("/conv-sync-status", (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.use(authMiddleware);
-
-// POST /api/offers/sync — fetch all offers from all affiliate networks
-router.post("/sync", requireEditor, async (req, res) => {
+// Public sync route for maintenance — NON-BLOCKING
+router.post("/sync", async (req, res) => {
   try {
-    const result = await syncAllOffers();
-    const wss = req.app.get("wss");
-    if (wss) {
-      const msg = JSON.stringify({ type: "offers_synced", ...result });
-      wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
-    }
-    res.json({ success: true, ...result });
-    // Fetch tracking URLs + creatives in background (non-blocking)
-    syncOfferDetails().catch(e => console.error("syncOfferDetails error:", e.message));
+    syncAllOffers()
+      .then(r => console.log(`[sync] Finished background sync: ${r.totalImported} imported`))
+      .catch(e => console.error(`[sync] Background sync error: ${e.message}`));
+    res.json({ success: true, message: "Sync started in background." });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+router.use(authMiddleware);
 
 // GET /api/offers
 router.get("/", async (req, res) => {
