@@ -47,7 +47,16 @@ router.post("/backfill-geo", async (req, res) => {
       if (!code || code === "Unknown") code = extractCountryFromName(oMeta.name);
       if (!code || code === "Unknown") code = countryToCode(oid);
       if (!code || code === "Unknown") code = countryToCode(cv.sub3);
-      if (!code || code === "Unknown") code = countryToCode(oMeta.name);
+      if (!code || code === "Unknown") code = countryToCode(cv.offer_name);
+      if (!code || code === "Unknown") code = countryToCode(cv.sponsor);
+      
+      // Forensic: check transaction ID or ID itself for signatures
+      if (!code || code === "Unknown") {
+        const forensicStr = String(cv._id || "") + String(cv.transaction_id || "");
+        if (forensicStr.toLowerCase().includes("au")) code = "AU";
+        if (forensicStr.toLowerCase().includes("nz")) code = "NZ";
+        if (forensicStr.toLowerCase().includes("us")) code = "US";
+      }
       
       if (code && code.toUpperCase() !== "UNKNOWN" && code.toUpperCase() !== (cv.country || "").toUpperCase()) {
         await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });

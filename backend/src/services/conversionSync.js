@@ -176,6 +176,8 @@ function extractOfferId(row) {
     row.offer?.id ?? row.offer_id?.id ?? row.offer?._id ??
     row.relationship?.offer?.network_offer_id ??
     row.relationship?.offer?.offer_id ??
+    row.offer?.network_offer_id ??
+    row.network_offer_id ??
     ""
   ).trim();
 }
@@ -185,6 +187,7 @@ function extractOfferName(row) {
     row.offer_name?.name ?? 
     row.relationship?.offer?.name ?? 
     row.relationship?.offer?.offer_name ??
+    row.offer?.name ??
     ""
   ).trim();
 }
@@ -194,6 +197,7 @@ function extractCountry(row) {
     row.geo_country ?? row.geo?.country ?? row["geo.country"] ??
     row.offer?.country ?? 
     row.relationship?.offer?.country ??
+    row.offer?.country_code ??
     ""
   ).trim();
 }
