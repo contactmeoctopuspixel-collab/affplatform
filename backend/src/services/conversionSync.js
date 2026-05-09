@@ -8,6 +8,27 @@ const SUB_NAMES = {
   16: "Kaoutar", 17: "Hafssa",
 };
 
+const COUNTRY_NAME_MAP = {
+  "united states": "US", "usa": "US", "united states of america": "US",
+  "united kingdom": "GB", "uk": "GB", "great britain": "GB",
+  "australia": "AU", "new zealand": "NZ",
+  "canada": "CA", "russia": "RU",
+  "france": "FR", "germany": "DE", "italy": "IT", "spain": "ES",
+  "netherlands": "NL", "belgium": "BE", "switzerland": "CH",
+  "sweden": "SE", "norway": "NO", "finland": "FI", "denmark": "DK",
+  "ireland": "IE", "austria": "AT", "portugal": "PT", "poland": "PL",
+  "czech republic": "CZ", "hungary": "HU", "greece": "GR", "romania": "RO",
+  "bulgaria": "BG", "turkey": "TR", "morocco": "MA", "algeria": "DZ",
+  "tunisia": "TN", "egypt": "EG", "nigeria": "NG", "south africa": "ZA",
+  "india": "IN", "pakistan": "PK", "bangladesh": "BD", "japan": "JP",
+  "south korea": "KR", "china": "CN", "taiwan": "TW", "hong kong": "HK",
+  "singapore": "SG", "malaysia": "MY", "thailand": "TH", "vietnam": "VN",
+  "philippines": "PH", "indonesia": "ID", "mexico": "MX", "brazil": "BR",
+  "argentina": "AR", "colombia": "CO", "chile": "CL", "peru": "PE",
+  "israel": "IL", "ukraine": "UA", "uae": "AE", "united arab emirates": "AE",
+  "saudi arabia": "SA",
+};
+
 // Build attempts using the CORRECT body format discovered via DevTools
 function buildAttempts(from, to) {
   // Correct body format as used by the Everflow portal (discovered via DevTools):
@@ -145,7 +166,8 @@ async function saveConversions(rows, sponsorName) {
       } catch { createdAt = new Date().toISOString(); }
     }
 
-    const country = String(row.country || row.country_code || row.country_name || "").trim().toUpperCase().slice(0, 2) || "";
+    const rawCountry = String(row.country || row.country_code || row.country_name || "").trim();
+    const country = COUNTRY_NAME_MAP[rawCountry.toLowerCase()] || rawCountry.slice(0, 2).toUpperCase() || "";
 
     const exists = await db.conversions.findOne({ transaction_id: txId });
     if (exists) {

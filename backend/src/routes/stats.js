@@ -377,7 +377,7 @@ router.post("/import-conversions", async (req, res) => {
 
         const exists = await db.conversions.findOne({ transaction_id: txId });
         if (exists) continue;
-        const country = String(row.country || row.country_code || row.country_name || "").trim().toUpperCase().slice(0, 2) || "";
+        const country = countryToCode(row.country || row.country_code || row.country_name || "");
         await db.conversions.insert({
           _id: txId, transaction_id: txId,
           sub3, revenue, offer_id: String(row.offer_id || row.network_offer_id || ""),
@@ -436,7 +436,7 @@ router.post("/import-csv", async (req, res) => {
       const createdAt = rawDate
         ? new Date(rawDate.replace(/(\d+)\/(\d+)\/(\d+)(.*)/, "$3-$1-$2$4")).toISOString()
         : new Date().toISOString();
-      const country = get(iCountry).toUpperCase().slice(0, 2);
+      const country = countryToCode(get(iCountry));
 
       const exists = await db.conversions.findOne({ transaction_id: txId });
       if (exists) { skipped++; continue; }
@@ -506,6 +506,53 @@ router.get("/debug-ids", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── COUNTRY NAME → ISO CODE LOOKUP ──────────────────────────────────────────
+const COUNTRY_NAME_MAP = {
+  "united states": "US", "usa": "US", "us": "US", "united states of america": "US",
+  "united kingdom": "GB", "uk": "GB", "gb": "GB", "great britain": "GB",
+  "australia": "AU", "au": "AU", "new zealand": "NZ", "nz": "NZ",
+  "canada": "CA", "ca": "CA", "russia": "RU", "ru": "RU",
+  "france": "FR", "fr": "FR", "germany": "DE", "de": "DE",
+  "italy": "IT", "it": "IT", "spain": "ES", "es": "ES",
+  "netherlands": "NL", "nl": "NL", "belgium": "BE", "be": "BE",
+  "switzerland": "CH", "ch": "CH", "sweden": "SE", "se": "SE",
+  "norway": "NO", "no": "NO", "finland": "FI", "fi": "FI",
+  "denmark": "DK", "dk": "DK", "ireland": "IE", "ie": "IE",
+  "austria": "AT", "at": "AT", "portugal": "PT", "pt": "PT",
+  "poland": "PL", "pl": "PL", "czech republic": "CZ", "cz": "CZ",
+  "hungary": "HU", "hu": "HU", "greece": "GR", "gr": "GR",
+  "romania": "RO", "ro": "RO", "bulgaria": "BG", "bg": "BG",
+  "turkey": "TR", "tr": "TR", "morocco": "MA", "ma": "MA",
+  "algeria": "DZ", "dz": "DZ", "tunisia": "TN", "tn": "TN",
+  "egypt": "EG", "eg": "EG", "nigeria": "NG", "ng": "NG",
+  "south africa": "ZA", "za": "ZA", "india": "IN", "in": "IN",
+  "pakistan": "PK", "pk": "PK", "bangladesh": "BD", "bd": "BD",
+  "japan": "JP", "jp": "JP", "south korea": "KR", "kr": "KR",
+  "china": "CN", "cn": "CN", "taiwan": "TW", "tw": "TW",
+  "hong kong": "HK", "hk": "HK", "singapore": "SG", "sg": "SG",
+  "malaysia": "MY", "my": "MY", "thailand": "TH", "th": "TH",
+  "vietnam": "VN", "vn": "VN", "philippines": "PH", "ph": "PH",
+  "indonesia": "ID", "id": "ID", "mexico": "MX", "mx": "MX",
+  "brazil": "BR", "br": "BR", "argentina": "AR", "ar": "AR",
+  "colombia": "CO", "co": "CO", "chile": "CL", "cl": "CL",
+  "peru": "PE", "pe": "PE", "israel": "IL", "il": "IL",
+  "ukraine": "UA", "ua": "UA", "uae": "AE", "united arab emirates": "AE",
+  "saudi arabia": "SA", "sa": "SA",
+};
+
+function countryToCode(raw) {
+  if (!raw) return "";
+  const v = String(raw).trim().toLowerCase();
+  // Already a 2-letter code we know
+  if (v.length === 2 && COUNTRY_NAME_MAP[v]) return COUNTRY_NAME_MAP[v];
+  // Full name lookup
+  if (COUNTRY_NAME_MAP[v]) return COUNTRY_NAME_MAP[v];
+  // Try first 2 chars as last resort
+  const fallback = v.slice(0, 2).toUpperCase();
+  if (COUNTRY_NAME_MAP[fallback.toLowerCase()]) return fallback;
+  return "";
+}
+
 // ─── COUNTRY NAME → FLAG / META ──────────────────────────────────────────────
 const GEO_META = {
   US: { name: "United States of America", flag: "🇺🇸" }, GB: { name: "United Kingdom", flag: "🇬🇧" },
@@ -554,7 +601,7 @@ router.get("/geo", async (req, res) => {
     const byCountry = {};
     for (const cv of conversions) {
       // Use real country from conversion data — NO sub3 fallback
-      const code = (cv.country || "").toUpperCase().trim();
+      const code = countryToCode(cv.country);
       if (!code || !GEO_META[code]) {
         // Count as unknown (shown separately)
         if (!byCountry["__unknown"]) byCountry["__unknown"] = { code: "UN", name: "Unknown", flag: "🌍", revenue: 0, conversions: 0, clicks: 0 };

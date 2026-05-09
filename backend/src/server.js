@@ -69,7 +69,9 @@ app.get("/api/postback", async (req, res) => {
     if (!transaction_id) return res.status(400).send("missing transaction_id");
     const exists = await db.conversions.findOne({ transaction_id });
     if (exists) return res.send("ok duplicate");
-    const countryCode = (country || "").toUpperCase().trim().slice(0, 2) || "";
+    const COUNTRY_NAMES = {"united states":"US","usa":"US","united kingdom":"GB","uk":"GB","australia":"AU","new zealand":"NZ","canada":"CA","france":"FR","germany":"DE","italy":"IT","spain":"ES","netherlands":"NL","norway":"NO","finland":"FI","china":"CN","japan":"JP","india":"IN","brazil":"BR","mexico":"MX","russia":"RU","switzerland":"CH","sweden":"SE","denmark":"DK","belgium":"BE","austria":"AT","ireland":"IE","poland":"PL","czech republic":"CZ","portugal":"PT","greece":"GR","romania":"RO","turkey":"TR","egypt":"EG","south africa":"ZA","nigeria":"NG","morocco":"MA","algeria":"DZ","tunisia":"TN","uae":"AE","united arab emirates":"AE","saudi arabia":"SA","israel":"IL","ukraine":"UA","philippines":"PH","thailand":"TH","vietnam":"VN","indonesia":"ID","malaysia":"MY","singapore":"SG","hong kong":"HK","taiwan":"TW"};
+    const raw = (country || "").trim().toLowerCase();
+    const countryCode = COUNTRY_NAMES[raw] || raw.slice(0, 2).toUpperCase() || "";
     await db.conversions.insert({
       _id: transaction_id,
       transaction_id,
