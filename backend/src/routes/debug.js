@@ -47,6 +47,36 @@ router.get("/everflow/:sponsorId", async (req, res) => {
   });
 });
 
+// GET /api/debug/geo-check — show samples of conversions + offers for debugging geo
+router.get("/geo-check", async (req, res) => {
+  const conversions = await db.conversions.find({}).sort({ created_at: -1 });
+  const offers = await db.offers.find({});
+
+  const offerRawMap = {};
+  for (const o of offers) {
+    const raw = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
+    offerRawMap[raw] = { id: o.id, name: o.name };
+  }
+
+  const convSamples = conversions.slice(0, 30).map(c => ({
+    _id: c._id,
+    offer_id: c.offer_id,
+    country: c.country || "(empty)",
+    sub3: c.sub3,
+    sponsor: c.sponsor,
+    created_at: c.created_at,
+    matched_offer: offerRawMap[c.offer_id] || null,
+  }));
+
+  const offerSamples = offers.slice(0, 30).map(o => ({
+    id: o.id,
+    name: o.name,
+    raw_id: (o.id || o._id || "").replace(/^[A-Z0-9]+-/, ""),
+  }));
+
+  res.json({ conversion_count: conversions.length, offer_count: offers.length, convSamples, offerSamples });
+});
+
 module.exports = router;
 
 // GET /api/debug/offers-list/:sponsorId — test offers list endpoint
