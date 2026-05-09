@@ -6,7 +6,43 @@ const db = require("../db");
 const { authMiddleware } = require("../middleware/auth");
 const router = express.Router();
 
-// Public maintenance routes moved here
+router.post("/backfill-geo", async (req, res) => {
+  try {
+    const conversions = await db.conversions.find({
+      $or: [
+        { country: { $exists: false } },
+        { country: "" },
+        { country: "Unknown" },
+        { country: "UNKNOWN" }
+      ]
+    });
+    
+    let updatedCount = 0;
+    const offers = await db.offers.find({});
+    const offerMap = {};
+    offers.forEach(o => {
+      const fullId = o.external_id || (o.id && o.id !== o._id ? o.id : "");
+      if (fullId && o.name) offerMap[fullId] = o.name;
+    });
+
+    for (const cv of conversions) {
+      const offerName = offerMap[cv.offer_id] || "";
+      const offerIdStr = String(cv.offer_id || "");
+      const sub3 = String(cv.sub3 || "");
+      
+      let code = "";
+      if (offerName) code = extractCountryFromOfferName(offerName);
+      if (!code && offerIdStr) code = countryToCode(offerIdStr);
+      if (!code && sub3) code = countryToCode(sub3);
+
+      if (code && code !== "Unknown" && code !== "UNKNOWN") {
+        await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });
+        updatedCount++;
+      }
+    }
+    res.json({ success: true, checked: conversions.length, updated: updatedCount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 router.use(authMiddleware);
 
@@ -666,43 +702,7 @@ function extractCountryFromOfferName(name) {
 
 // ─── BACKFILL COUNTRY ON EXISTING CONVERSIONS ───────────────────────────────
 // POST /api/stats/backfill-geo — scans all conversions without country and fills from offer names
-router.post("/backfill-geo", async (req, res) => {
-  try {
-    const conversions = await db.conversions.find({
-      $or: [
-        { country: { $exists: false } },
-        { country: "" },
-        { country: "Unknown" },
-        { country: "UNKNOWN" }
-      ]
-    });
-    
-    let updatedCount = 0;
-    const offers = await db.offers.find({});
-    const offerMap = {};
-    offers.forEach(o => {
-      const fullId = o.external_id || (o.id && o.id !== o._id ? o.id : "");
-      if (fullId && o.name) offerMap[fullId] = o.name;
-    });
 
-    for (const cv of conversions) {
-      const offerName = offerMap[cv.offer_id] || "";
-      const offerIdStr = String(cv.offer_id || "");
-      const sub3 = String(cv.sub3 || "");
-      
-      let code = "";
-      if (offerName) code = extractCountryFromOfferName(offerName);
-      if (!code && offerIdStr) code = countryToCode(offerIdStr);
-      if (!code && sub3) code = countryToCode(sub3);
-
-      if (code && code !== "Unknown" && code !== "UNKNOWN") {
-        await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });
-        updatedCount++;
-      }
-    }
-    res.json({ success: true, checked: conversions.length, updated: updatedCount });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
 
 // ─── GEOGRAPHIC DISTRIBUTION — uses real country from conversion data ─────────
 router.get("/geo", async (req, res) => {
