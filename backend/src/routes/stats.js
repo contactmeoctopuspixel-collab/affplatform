@@ -386,9 +386,14 @@ router.post("/import-conversions", async (req, res) => {
         }
         let country = countryToCode(row.country || row.country_code || row.country_name || "");
         if (!country) {
-          const offerName = String(row.offer_name || row.name || "");
-          const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
-          if (m) country = countryToCode(m[1]);
+          const rawOid = String(row.offer_id ?? row.network_offer_id ?? "");
+          if (rawOid) {
+            const offerRow = await db.offers.findOne({ id: { $regex: rawOid + "$" } }) || await db.offers.findOne({ _id: { $regex: rawOid + "$" } });
+            if (offerRow?.name) {
+              const m = String(offerRow.name).match(/^([A-Za-z]{2})\s*-\s/);
+              if (m) country = countryToCode(m[1]);
+            }
+          }
         }
         await db.conversions.insert({
           _id: txId, transaction_id: txId,
@@ -610,12 +615,15 @@ router.get("/geo", async (req, res) => {
     const fromStart = fromDate + "T00:00:00.000Z";
     const conversions = await db.conversions.find({ created_at: { $gte: fromStart, $lte: toEnd } });
 
-    // Build offer name→ID map for extracting country from offer names
+    // Build offer lookup: offer DB has composite IDs like "SP001-104817",
+    // but conversion stores raw offer_id like "104817". Match by suffix.
     const allOffers = await db.offers.find({});
-    const offerNameMap = {};
+    const offerLookup = {};
     for (const o of allOffers) {
-      if (o.name) offerNameMap[o.id] = o.name;
-      if (o._id) offerNameMap[o._id] = o.name;
+      const rawId = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, ""); // strip prefix
+      if (rawId && o.name) {
+        if (!offerLookup[rawId]) offerLookup[rawId] = o.name;
+      }
     }
 
     const byCountry = {};
@@ -623,10 +631,10 @@ router.get("/geo", async (req, res) => {
       // 1. Try stored country field
       let code = countryToCode(cv.country);
       // 2. Fallback: extract country from offer name (e.g. "US - ...", "NO - ...")
-      if (!code || !GEO_META[code]) {
-        const offerName = offerNameMap[cv.offer_id] || "";
-        const offerMatch = offerName.match(/^([A-Z]{2})\s*-\s/);
-        if (offerMatch) code = countryToCode(offerMatch[1]);
+      if ((!code || !GEO_META[code]) && cv.offer_id) {
+        const offerName = offerLookup[cv.offer_id] || "";
+        const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
+        if (m) code = countryToCode(m[1]);
       }
       if (!code || !GEO_META[code]) {
         // Count as unknown (shown separately)

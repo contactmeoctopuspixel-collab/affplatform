@@ -142,6 +142,14 @@ async function detectAndFetch(apiKey, from, to) {
 
 // Save conversions to DB, skip duplicates — returns { saved, newItems }
 async function saveConversions(rows, sponsorName) {
+  // Build offer name lookup (raw offer ID → name)
+  const allDbOffers = await db.offers.find({});
+  const offerNameByRawId = {};
+  for (const o of allDbOffers) {
+    const raw = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
+    if (raw && o.name && !offerNameByRawId[raw]) offerNameByRawId[raw] = o.name;
+  }
+
   let saved = 0;
   const newItems = [];
   for (const row of rows) {
@@ -155,7 +163,6 @@ async function saveConversions(rows, sponsorName) {
     if (!txId) continue;
 
     const revenue = parseFloat(row.revenue ?? row.payout ?? 0);
-    // Everflow returns unix timestamp in seconds as conversion_unix_timestamp
     let createdAt;
     if (row.conversion_unix_timestamp) {
       createdAt = new Date(row.conversion_unix_timestamp * 1000).toISOString();
@@ -166,21 +173,20 @@ async function saveConversions(rows, sponsorName) {
       } catch { createdAt = new Date().toISOString(); }
     }
 
+    // Extract country: 1) from API fields, 2) from offer name in our DB
     let rawCountry = String(row.country || row.country_code || row.country_name || "").trim();
-    // If no country from API, try extracting from offer name (e.g. "US - Pre-Lander...")
-    if (!rawCountry && row.offer_name) {
-      const m = String(row.offer_name).match(/^([A-Za-z]{2})\s*-\s/);
-      if (m) rawCountry = m[1];
-    }
-    if (!rawCountry && row.name) {
-      const m = String(row.name).match(/^([A-Za-z]{2})\s*-\s/);
-      if (m) rawCountry = m[1];
+    if (!rawCountry) {
+      const rawOid = String(row.offer_id ?? row.network_offer_id ?? "");
+      const offerName = offerNameByRawId[rawOid];
+      if (offerName) {
+        const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
+        if (m) rawCountry = m[1];
+      }
     }
     const country = COUNTRY_NAME_MAP[rawCountry.toLowerCase()] || rawCountry.slice(0, 2).toUpperCase() || "";
 
     const exists = await db.conversions.findOne({ transaction_id: txId });
     if (exists) {
-      // Backfill country on existing records that don't have it yet
       if (!exists.country && country) {
         await db.conversions.update({ _id: exists._id }, { $set: { country } });
       }
@@ -188,14 +194,10 @@ async function saveConversions(rows, sponsorName) {
     }
 
     await db.conversions.insert({
-      _id: txId,
-      transaction_id: txId,
-      sub3: String(subId),
-      revenue,
+      _id: txId, transaction_id: txId,
+      sub3: String(subId), revenue,
       offer_id: String(row.offer_id ?? row.network_offer_id ?? ""),
-      sponsor: sponsorName,
-      event_type: "cv",
-      country,
+      sponsor: sponsorName, event_type: "cv", country,
       created_at: createdAt,
     });
     saved++;
