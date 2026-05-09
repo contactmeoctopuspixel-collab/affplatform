@@ -27,7 +27,7 @@ router.post("/backfill-geo", async (req, res) => {
     for (const cv of conversions) {
       const oMeta = offerMap[cv.offer_id] || { name: "", country: "" };
       let code = oMeta.country;
-      if (!code) code = extractCountryFromOfferName(oMeta.name);
+      if (!code) code = extractCountryFromName(oMeta.name);
       if (!code) code = countryToCode(cv.offer_id);
       if (!code) code = countryToCode(cv.sub3);
       
@@ -643,6 +643,26 @@ const COUNTRY_NAME_MAP = {
   "chile": "CL", "cl": "CL", "peru": "PE", "pe": "PE",
 };
 
+function extractCountryFromName(name) {
+  if (!name) return "";
+  const v = name.toLowerCase();
+  for (const [k, code] of Object.entries(COUNTRY_NAME_MAP)) {
+    const regex = new RegExp(`(^|[^a-z])${k.replace('.', '\\.')}([^a-z]|$)`, 'i');
+    if (regex.test(v)) return code;
+  }
+  // Match prefixes like "US - ", "AU - ", "US-"
+  const m = name.match(/^([A-Z]{2,3})\s*-\s/i);
+  if (m) {
+    const c = m[1].toUpperCase();
+    if (c === "USA") return "US";
+    if (c === "AUS") return "AU";
+    if (c === "NZL") return "NZ";
+    const knownCodes = Object.values(COUNTRY_NAME_MAP);
+    if (knownCodes.includes(c)) return c;
+  }
+  return "";
+}
+
 function countryToCode(raw) {
   if (!raw) return "";
   const v = String(raw).trim().toLowerCase();
@@ -786,7 +806,7 @@ router.get("/geo", async (req, res) => {
       
       // Tier 2: Offer Name
       if (!code && offerName) {
-        code = extractCountryFromOfferName(offerName);
+        code = extractCountryFromName(offerName);
       }
       
       // Tier 3: Offer ID String (e.g. "500_US")
@@ -801,7 +821,7 @@ router.get("/geo", async (req, res) => {
       
       // Tier 5: Sponsor Name (Fall-back)
       if (!code && cv.sponsor) {
-        code = extractCountryFromOfferName(cv.sponsor);
+        code = extractCountryFromName(cv.sponsor);
       }
       
       // Final normalization
