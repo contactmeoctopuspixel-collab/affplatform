@@ -676,6 +676,26 @@ function DashboardPage() {
           {sponsors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <button className="btn btn-sm btn-primary" onClick={load}>Apply Filters</button>
+        <button 
+          className="btn btn-sm" 
+          style={{background:"var(--purple)", color:"#fff", borderColor:"var(--purple)"}}
+          onClick={async () => {
+            setSubSyncing(true);
+            setSubSyncMsg("Starting deep 90-day sync...");
+            try {
+              const res = await api.convSyncNow(90);
+              setSubSyncMsg(`Deep Sync Complete: +${res.totalSaved} new leads recovered.`);
+              load();
+            } catch (e) {
+              setSubSyncMsg("Sync failed: " + e.message);
+            } finally {
+              setTimeout(() => { setSubSyncing(false); setSubSyncMsg(""); }, 3000);
+            }
+          }}
+          disabled={subSyncing}
+        >
+          {subSyncing ? "Syncing..." : "Deep Sync (90d)"}
+        </button>
       </div>
 
       {/* ── KPI CARDS with Trends ─────────────────────────────────────────── */}

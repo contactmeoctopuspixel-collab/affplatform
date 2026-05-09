@@ -51,7 +51,7 @@ export const api = {
   hourly:         () => req("GET", "/stats/hourly"),
   subAffiliates:      (from, to, sponsor) => req("GET",  `/stats/sub-affiliates?from=${from||''}&to=${to||''}${sponsor ? `&sponsor=${encodeURIComponent(sponsor)}` : ''}`),
   convSyncStatus:     ()         => req("GET",  "/stats/conv-sync-status"),
-  convSyncNow:        ()         => req("POST", "/stats/conv-sync-now"),
+  convSyncNow:        (days = 30) => req("POST", `/stats/conv-sync-now?days=${days}`),
 
   // AI
   aiRecommendations: (limit = 8) => req("GET", `/ai/recommendations?limit=${limit}`),

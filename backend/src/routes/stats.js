@@ -427,7 +427,7 @@ router.get("/sub-affiliates", async (req, res) => {
       created_at: { $gte: fromStart, $lte: toEnd },
       event_type: "click",
     };
-    if (filterSponsor) clickQuery.sponsor = filterSponsor;
+    if (filterSponsorName) clickQuery.sponsor = filterSponsorName;
 
     const clickEvents = await db.events.find(clickQuery);
 
@@ -577,6 +577,7 @@ router.post("/import-csv", async (req, res) => {
     const iTxId  = col(["transaction", "tx_id", "conv_id", "conversion id"]);
     const iDate  = col(["date", "conversion date", "conv date"]);
     const iCountry = col(["country", "country code", "country_name", "geo"]);
+    const iOffer = col(["offer"]);
 
     if (iSub3 < 0) return res.json({ imported: 0, error: "Colonne Sub3 introuvable dans le CSV" });
 
@@ -599,6 +600,7 @@ router.post("/import-csv", async (req, res) => {
       const country = countryToCode(get(iCountry));
       const offerName = get(iOffer);
       const rawOid = "";
+      const sponsorName = "csv-import";
 
       const exists = await db.conversions.findOne({ transaction_id: txId });
       if (exists) { skipped++; continue; }
@@ -650,9 +652,10 @@ router.post("/sync", async (req, res) => {
 
 router.post("/conv-sync-now", async (req, res) => {
   try {
-    const { runConversionSync, getConvSyncStatus } = require("../services/liveSync");
-    await runConversionSync();
-    res.json({ ok: true, ...getConvSyncStatus() });
+    const { syncConversions } = require("../services/conversionSync");
+    const days = parseInt(req.query.days || "30", 10);
+    const result = await syncConversions(days);
+    res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -703,7 +706,12 @@ const COUNTRY_NAME_MAP = {
   "brazil": "BR", "br": "BR", "bra": "BR",
   "india": "IN", "in": "IN", "ind": "IN",
   "japan": "JP", "jp": "JP", "jpn": "JP",
-  "china": "CN", "cn": "CN", "chn": "CN",
+  "taiwan": "TW", "tw": "TW", "hong kong": "HK", "hk": "HK",
+  "singapore": "SG", "sg": "SG", "malaysia": "MY", "my": "MY",
+  "thailand": "TH", "th": "TH", "vietnam": "VN", "vn": "VN",
+  "indonesia": "ID", "id": "ID",
+  "argentina": "AR", "ar": "AR", "colombia": "CO", "co": "CO",
+  "chile": "CL", "cl": "CL", "peru": "PE", "pe": "PE",
   "morocco": "MA", "ma": "MA", "mar": "MA", "maroc": "MA",
   "uae": "AE", "united arab emirates": "AE", "ae": "AE",
   "saudi arabia": "SA", "sa": "SA", "sau": "SA",
@@ -716,13 +724,7 @@ const COUNTRY_NAME_MAP = {
   "turkey": "TR", "tr": "TR", "algeria": "DZ", "dz": "DZ",
   "tunisia": "TN", "tn": "TN", "egypt": "EG", "eg": "EG",
   "nigeria": "NG", "ng": "NG", "pakistan": "PK", "pk": "PK",
-  "bangladesh": "BD", "bd": "BD", "south korea": "KR", "kr": "KR",
-  "taiwan": "TW", "tw": "TW", "hong kong": "HK", "hk": "HK",
-  "singapore": "SG", "sg": "SG", "malaysia": "MY", "my": "MY",
-  "thailand": "TH", "th": "TH", "vietnam": "VN", "vn": "VN",
-  "indonesia": "ID", "id": "ID",
-  "argentina": "AR", "ar": "AR", "colombia": "CO", "co": "CO",
-  "chile": "CL", "cl": "CL", "peru": "PE", "pe": "PE",
+  "bangladesh": "BD", "bd": "BD", "south korea": "KR", "kr": "KR"
 };
 
 function extractCountryFromName(name) {
@@ -731,8 +733,8 @@ function extractCountryFromName(name) {
   
   // Tier 1: High-priority Regional Regex (US, AU, NZ)
   if (/^us\s*[-_]/i.test(v) || v.includes("[us]") || v.includes("(us)") || v.includes("_us")) return "US";
-  if (/^au\s*[-_]/i.test(v) || v.includes("[au]") || v.includes("(au)") || v.includes("_au") || v.includes("australia")) return "AU";
-  if (/^nz\s*[-_]/i.test(v) || v.includes("[nz]") || v.includes("(nz)") || v.includes("_nz") || v.includes("new zealand")) return "NZ";
+  if (/^au\s*[-_]/i.test(v) || v.includes("[au]") || v.includes("(au)") || v.includes("_au") || v.includes("australia") || v.includes("st john ambulance")) return "AU";
+  if (/^nz\s*[-_]/i.test(v) || v.includes("[nz]") || v.includes("(nz)") || v.includes("_nz") || v.includes("new zealand") || v.includes("zealand") || v.includes("cloud storage") || v.includes("cloudstorage")) return "NZ";
   
   // Tier 2: Pattern matching from map
   for (const [k, code] of Object.entries(COUNTRY_NAME_MAP)) {
@@ -786,13 +788,12 @@ function countryToCode(raw) {
   // 4. Fallback to common patterns (High Priority for US/AU/NZ/GB/CA)
   if (v.includes("united states") || v.includes(" usa") || v.includes("[us]") || v.includes("_us") || v.startsWith("us-")) return "US";
   if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au") || v.startsWith("au-") || v.includes("st john ambulance")) return "AU";
-  if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz") || v.startsWith("nz-") || v.includes("cloud storage flow")) return "NZ";
+  if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz") || v.startsWith("nz-") || v.includes("cloud storage flow") || v.includes("zealand") || v.includes("cloud storage")) return "NZ";
   if (v.includes("united kingdom") || v.includes(" uk") || v.includes("[gb]") || v.includes("_gb") || v.startsWith("gb-")) return "GB";
   if (v.includes("canada") || v.includes(" ca") || v.includes("[ca]") || v.includes("_ca")) return "CA";
   if (v.includes("netherlands") || v.includes(" nld") || v.includes(" ne-") || v === "ne") return "NL";
   if (v.includes("sweden") || v.includes(" swe") || v.includes(" sw-") || v === "sw") return "SE";
   if (v.includes("spain") || v.includes(" esp") || v.includes(" sp-") || v === "sp") return "ES";
-  // Removed PH as requested by user
 
   // 5. Fallback to first 2 chars if they form a known code
   const fallback = v.slice(0, 2).toUpperCase();
@@ -939,7 +940,7 @@ router.get("/geo", async (req, res) => {
         const rawCountry = String(cv.country || "").toUpperCase();
 
         if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance") || rawCountry === "PH" || rawCountry.includes("PHILIPPINES")) code = "AU";
-        else if (forensicStr.includes("nz") || forensicStr.includes("new zealand") || forensicStr.includes("cloud storage")) code = "NZ";
+        else if (forensicStr.includes("nz") || forensicStr.includes("new zealand") || forensicStr.includes("zealand") || forensicStr.includes("cloud storage") || forensicStr.includes("cloudstorage")) code = "NZ";
         else if (forensicStr.includes("us") || forensicStr.includes("united states")) code = "US";
       }
       

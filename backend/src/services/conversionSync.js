@@ -46,16 +46,25 @@ const COUNTRY_NAME_MAP = {
 function countryToCode(raw) {
   if (!raw) return "";
   const v = String(raw).trim().toLowerCase();
+  
+  if (v === "unknown" || v === "none" || v === "null") return "";
   if (COUNTRY_NAME_MAP[v]) return COUNTRY_NAME_MAP[v];
-  if (v.length === 2) {
-    const upper = v.toUpperCase();
-    if (Object.values(COUNTRY_NAME_MAP).includes(upper)) return upper;
-  }
+  
+  const upper = v.toUpperCase();
+  const knownCodes = Object.values(COUNTRY_NAME_MAP);
+  if (knownCodes.includes(upper)) return upper;
+  
+  // US/AU/NZ Fallbacks
+  if (v.includes("united states") || v.includes(" usa") || v.includes("[us]") || v.includes("_us") || v.startsWith("us-")) return "US";
+  if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au") || v.startsWith("au-") || v.includes("st john ambulance") || v.includes("philippines") || v === "ph") return "AU";
+  if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz") || v.startsWith("nz-") || v.includes("zealand") || v.includes("cloud storage")) return "NZ";
+  
   for (const [name, code] of Object.entries(COUNTRY_NAME_MAP)) {
     if (v.includes(name)) return code;
   }
+  
   const fallback = v.slice(0, 2).toUpperCase();
-  if (Object.values(COUNTRY_NAME_MAP).includes(fallback)) return fallback;
+  if (knownCodes.includes(fallback)) return fallback;
   return "";
 }
 // Build attempts using the CORRECT body format discovered via DevTools
@@ -239,11 +248,10 @@ async function saveConversions(rows, sponsorName) {
     let country = countryToCode(rawCountry);
 
     if (!country && offerName) {
-      // Aggressive scanning for US/AU/NZ variants
       const v = offerName.toLowerCase();
       if (v.includes("united states") || v.includes(" usa") || v.includes("[us]") || v.includes("_us")) country = "US";
-      else if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au")) country = "AU";
-      else if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz")) country = "NZ";
+      else if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au") || v.includes("st john ambulance") || v.includes("philippines") || v === "ph") country = "AU";
+      else if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz") || v.includes("zealand") || v.includes("cloud storage")) country = "NZ";
       else {
         // Sort keys by length descending to match longer names first
         const sortedKeys = Object.keys(COUNTRY_NAME_MAP).sort((a, b) => b.length - a.length);
