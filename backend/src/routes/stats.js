@@ -65,12 +65,25 @@ router.post("/backfill-geo", async (req, res) => {
       if (!code || code === "Unknown") code = countryToCode(cv.sub3);
       if (!code || code === "Unknown") code = countryToCode(cv.sponsor);
       
-      // 4. Forensic Scan
+      // 4. Forensic Scan (Strict Case-Sensitive + Standard)
       if (!code || code === "Unknown") {
-        const forensicStr = (String(cv._id || "") + String(cv.transaction_id || "") + String(cv.offer_name || "")).toLowerCase();
-        if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance")) code = "AU";
-        else if (forensicStr.includes("nz") || forensicStr.includes("new zealand") || forensicStr.includes("cloud storage")) code = "NZ";
-        else if (forensicStr.includes("us") || forensicStr.includes("united states")) code = "US";
+        const rawId = String(cv._id || "");
+        const rawTrans = String(cv.transaction_id || "");
+        const rawName = String(cv.offer_name || "");
+        const rawSponsor = String(cv.sponsor || "");
+        
+        // Check uppercase first (per user request)
+        if (rawName.includes("AU") || rawSponsor.includes("AU") || rawId.includes("AU")) code = "AU";
+        else if (rawName.includes("NZ") || rawSponsor.includes("NZ") || rawId.includes("NZ")) code = "NZ";
+        else if (rawName.includes("US") || rawSponsor.includes("US") || rawId.includes("US")) code = "US";
+        
+        // Fallback to case-insensitive forensic search
+        if (!code) {
+          const forensicStr = (rawId + rawTrans + rawName + rawSponsor).toLowerCase();
+          if (forensicStr.includes("australia") || forensicStr.includes("st john ambulance")) code = "AU";
+          else if (forensicStr.includes("new zealand") || forensicStr.includes("cloud storage")) code = "NZ";
+          else if (forensicStr.includes("united states")) code = "US";
+        }
       }
       
       if (code && code.toUpperCase() !== "UNKNOWN" && code.toUpperCase() !== (cv.country || "").toUpperCase()) {
