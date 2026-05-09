@@ -513,10 +513,12 @@ function DashboardPage() {
   const [err,         setErr]         = useState("");
   const [lastUpdate,  setLastUpdate]  = useState(null);
   const [pulse,       setPulse]       = useState(false);
-  const [dateFrom,    setDateFrom]    = useState(() => new Date().toISOString().slice(0,10));
-  const [dateTo,      setDateTo]      = useState(() => new Date().toISOString().slice(0,10));
-  const [periodLabel, setPeriodLabel] = useState("Today");
-  const [activePreset, setActivePreset] = useState("today");
+  const todayFmt = new Date().toISOString().slice(0,10);
+  const weekAgoFmt = new Date(Date.now() - 6 * 86400000).toISOString().slice(0,10);
+  const [dateFrom,    setDateFrom]    = useState(weekAgoFmt);
+  const [dateTo,      setDateTo]      = useState(todayFmt);
+  const [periodLabel, setPeriodLabel] = useState("Last 7 Days");
+  const [activePreset, setActivePreset] = useState("7d");
   const [filterSponsor, setFilterSponsor] = useState("");
   const [sponsors,    setSponsors]    = useState([]);
   const [geoMetric,   setGeoMetric]   = useState("leads");
@@ -958,10 +960,10 @@ function DashboardPage() {
           </div>
       </div>
 
-      {/* ── TOP OFFERS ────────────────────────────────────────────────────── */}
+      {/* ── TOP SPONSORS ────────────────────────────────────────────────────── */}
       <div className="card" style={{marginBottom:16}}>
         <div className="card-head">
-          <span className="card-title">Top Offers by Revenue (Live)</span>
+          <span className="card-title">Top Sponsors by Revenue (Live)</span>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>{periodLabel}</span>
             <button className="btn btn-sm" style={{fontSize:10}} onClick={load}>⟳ Refresh now</button>
@@ -969,19 +971,18 @@ function DashboardPage() {
         </div>
         <div className="tbl-wrap">
           <table>
-            <thead><tr><th>ID</th><th>Offer</th><th>Sponsor</th><th>Payout</th><th>Leads</th><th>Revenue</th></tr></thead>
+            <thead><tr><th>Sponsor</th><th>Leads</th><th>Revenue</th><th>Avg. Payout</th><th>Status</th></tr></thead>
             <tbody>
-              {topOffers?.length > 0 ? topOffers.map(o => (
-                <tr key={o.id}>
-                  <td><span className="offer-id">{o.external_id || o.id}</span></td>
-                  <td style={{fontWeight:600,fontSize:12}}>{o.name}</td>
-                  <td style={{fontFamily:"var(--font-mono)",fontSize:11,color:o.sponsor_color||"var(--text2)"}}>{o.sponsor_name}</td>
-                  <td><span className="payout-v">${o.payout}</span></td>
-                  <td className="mono" style={{color:"var(--cyan)",fontWeight:700}}>{o.leads}</td>
-                  <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(o.est_revenue).toFixed(0)}</td>
+              {sponsorBreakdown?.length > 0 ? sponsorBreakdown.sort((a,b)=>b.revenue-a.revenue).map(s => (
+                <tr key={s.id}>
+                  <td style={{fontWeight:700,color:s.color}}>{s.name}</td>
+                  <td className="mono" style={{color:"var(--cyan)"}}>{s.leads}</td>
+                  <td className="mono" style={{color:"var(--green)"}}>${Number(s.revenue).toFixed(2)}</td>
+                  <td className="mono">${s.leads > 0 ? (s.revenue / s.leads).toFixed(2) : "0.00"}</td>
+                  <td><span className={`pill pill-${s.status === "connected" ? "green" : "red"}`} style={{fontSize:9}}>{s.status}</span></td>
                 </tr>
               )) : (
-                <tr><td colSpan={6} style={{textAlign:"center",padding:"20px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text2)"}}>No offers with conversions in this period</td></tr>
+                <tr><td colSpan={5} style={{textAlign:"center",padding:20,fontSize:11,color:"var(--text2)"}}>No sponsor data for this period</td></tr>
               )}
             </tbody>
           </table>

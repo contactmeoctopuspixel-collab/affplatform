@@ -587,20 +587,29 @@ function countryToCode(raw) {
   // 1. Direct lookup in map
   if (COUNTRY_NAME_MAP[v]) return COUNTRY_NAME_MAP[v];
   
-  // 2. If it's a 2-letter code, try to find it in the map values
-  if (v.length === 2) {
-    const upper = v.toUpperCase();
-    if (Object.values(COUNTRY_NAME_MAP).includes(upper)) return upper;
-  }
-  
+  // 2. Exact code match (e.g. "US", "USA")
+  const upper = v.toUpperCase();
+  const knownCodes = Object.values(COUNTRY_NAME_MAP);
+  if (knownCodes.includes(upper)) return upper;
+  if (upper === "USA") return "US";
+  if (upper === "AUS") return "AU";
+  if (upper === "NZL") return "NZ";
+  if (upper === "GBR") return "GB";
+  if (upper === "CAN") return "CA";
+
   // 3. Try to find the key as a substring (for cases like "US - Norton")
   for (const [name, code] of Object.entries(COUNTRY_NAME_MAP)) {
     if (v.includes(name)) return code;
   }
+  
+  // 4. Fallback to common patterns
+  if (v.startsWith("us") || v.endsWith("_us") || v.includes("-us")) return "US";
+  if (v.startsWith("au") || v.endsWith("_au") || v.includes("-au")) return "AU";
+  if (v.startsWith("nz") || v.endsWith("_nz") || v.includes("-nz")) return "NZ";
 
-  // 4. Fallback to first 2 chars if they form a known code
+  // 5. Fallback to first 2 chars if they form a known code
   const fallback = v.slice(0, 2).toUpperCase();
-  if (Object.values(COUNTRY_NAME_MAP).includes(fallback)) return fallback;
+  if (knownCodes.includes(fallback)) return fallback;
   return "";
 }
 
