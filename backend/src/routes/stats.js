@@ -6,6 +6,17 @@ const db = require("../db");
 const { authMiddleware } = require("../middleware/auth");
 const router = express.Router();
 
+router.get("/audit-geo", async (req, res) => {
+  try {
+    const convs = await db.conversions.find({}).limit(50);
+    const offers = await db.offers.find({}).limit(50);
+    res.json({
+      conversions: convs.map(c => ({ id: c._id, offer_id: c.offer_id, name: c.offer_name, country: c.country })),
+      offers: offers.map(o => ({ id: o.id, ext: o.external_id, name: o.name, country: o.country }))
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.post("/backfill-geo", async (req, res) => {
   try {
     const conversions = await db.conversions.find({
