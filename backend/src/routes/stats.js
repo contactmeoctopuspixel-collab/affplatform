@@ -19,33 +19,37 @@ router.get("/audit-geo", async (req, res) => {
 
 router.post("/backfill-geo", async (req, res) => {
   try {
-    const conversions = await db.conversions.find({
+    const force = req.query.force === "true";
+    const query = force ? {} : {
       $or: [
         { country: { $exists: false } }, { country: "" },
-        { country: "Unknown" }, { country: "UNKNOWN" }
+        { country: "Unknown" }, { country: "UNKNOWN" },
+        { country: "UN" }, { country: "un" }
       ]
-    });
+    };
     
+    const conversions = await db.conversions.find(query);
     const offers = await db.offers.find({});
     const offerMap = {};
     offers.forEach(o => {
       const rawId = (o.id || "").replace(/^[A-Z0-9]+-/, "");
       if (rawId) offerMap[rawId] = { name: o.name, country: o.country };
-      if (o.external_id) offerMap[o.external_id] = { name: o.name, country: o.country };
+      if (o.external_id) offerMap[String(o.external_id)] = { name: o.name, country: o.country };
     });
 
     let updated = 0;
-    console.log(`[backfill] Checking ${conversions.length} unknown conversions...`);
+    console.log(`[backfill] Checking ${conversions.length} conversions (force=${force})...`);
     for (const cv of conversions) {
       const oid = String(cv.offer_id || "");
       const oMeta = offerMap[oid] || { name: cv.offer_name || "", country: "" };
       
       let code = oMeta.country;
-      if (!code) code = extractCountryFromName(oMeta.name);
-      if (!code) code = countryToCode(oid);
-      if (!code) code = countryToCode(cv.sub3);
+      if (!code || code === "Unknown") code = extractCountryFromName(oMeta.name);
+      if (!code || code === "Unknown") code = countryToCode(oid);
+      if (!code || code === "Unknown") code = countryToCode(cv.sub3);
+      if (!code || code === "Unknown") code = countryToCode(oMeta.name);
       
-      if (code && code.toUpperCase() !== "UNKNOWN") {
+      if (code && code.toUpperCase() !== "UNKNOWN" && code.toUpperCase() !== (cv.country || "").toUpperCase()) {
         await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });
         updated++;
       }
