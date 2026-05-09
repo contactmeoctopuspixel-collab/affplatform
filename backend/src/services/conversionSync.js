@@ -58,7 +58,6 @@ function countryToCode(raw) {
   if (Object.values(COUNTRY_NAME_MAP).includes(fallback)) return fallback;
   return "";
 }
-
 // Build attempts using the CORRECT body format discovered via DevTools
 function buildAttempts(from, to) {
   // Correct body format as used by the Everflow portal (discovered via DevTools):
@@ -265,7 +264,6 @@ async function saveConversions(rows, sponsorName) {
       const m = offerName.match(/^([A-Za-z]{2,3})\s*-\s/);
       if (m) country = countryToCode(m[1]);
     }
-
     const exists = await db.conversions.findOne({ transaction_id: txId });
     if (exists) {
       if (!exists.country && country) {
@@ -318,3 +316,4 @@ async function syncConversions(daysBack = 30) {
 }
 
 module.exports = { syncConversions, SUB_NAMES };
+

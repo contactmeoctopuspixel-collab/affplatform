@@ -62,6 +62,17 @@ async function fetchEverflow(baseUrl, apiKey) {
       report:       [],
     };
 
+    // 2. Fetch Active Offers
+    try {
+      const offersRes = await fetch(`${API}/affiliates/offers?page_size=1000&relationship=all`, { headers, timeout: 15000 });
+      if (offersRes.ok) {
+        const odata = await offersRes.json();
+        normalized.offers = odata.offers || [];
+      }
+    } catch (e) {
+      console.log("[apiProxy] Failed to fetch offers:", e.message);
+    }
+
     return { success: true, data: normalized };
 
   } catch (e) {
@@ -113,8 +124,24 @@ async function fetchEflowDashboard(apiKey) {
           leads:   data.conversion?.last_month || 0,
           revenue: data.revenue?.last_month    || 0,
         },
+        offers: [],
       }
     };
+
+    // Try to fetch some offers for the dashboard list
+    try {
+      const { body: odata } = await httpsPost(
+        "api.eflow.team",
+        "/v1/affiliates/offers?page_size=100&relationship=all",
+        headers,
+        "{}"
+      );
+      if (odata && odata.offers) {
+        result.data.offers = odata.offers;
+      }
+    } catch {}
+
+    return result;
   } catch (e) {
     return { error: e.message };
   }
@@ -177,22 +204,30 @@ async function fetchAndSync(sponsorId) {
 
     // Sync offers if available
     if (d.offers && Array.isArray(d.offers) && d.offers.length > 0) {
-      for (const o of d.offers.slice(0, 50)) {
-        const offerId = `${sponsorId}-${o.offer_id || o.id || o.network_offer_id}`;
-        const exists  = await db.offers.findOne({ _id: offerId });
-        if (!exists) {
-          await db.offers.insert({
-            _id: offerId, id: offerId, sponsor_id: sponsorId,
-            name:     o.offer?.name || o.name || `Offer ${o.offer_id}`,
-            payout:   o.default_goal_name?.payout || o.payout || 0,
-            clicks:   o.reporting?.total_click || 0,
-            leads:    o.reporting?.cv || 0,
-            category: o.vertical?.name || "General",
-            status:   o.status === 1 ? "active" : "paused",
-            external_id: String(o.offer_id || o.id || ""),
-            created_at: now,
-          });
-        }
+      for (const o of d.offers) {
+        const rawId = String(o.network_offer_id || o.offer_id || o.id || "");
+        if (!rawId) continue;
+        const offerId = `${sponsorId}-${rawId}`;
+        const name = o.name || o.offer_name || `Offer ${rawId}`;
+        const payout = o.payout || o.default_goal_name?.payout || 0;
+        const status = (o.status === "active" || o.status === 1) ? "active" : "paused";
+
+        await db.offers.update(
+          { _id: offerId },
+          { 
+            $set: { 
+              id: offerId, 
+              sponsor_id: sponsorId,
+              name, 
+              payout: parseFloat(payout),
+              status,
+              external_id: rawId,
+              updated_at: now
+            },
+            $setOnInsert: { created_at: now }
+          },
+          { upsert: true }
+        );
       }
     }
   } else {

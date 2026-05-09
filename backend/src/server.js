@@ -118,10 +118,12 @@ app.get("/api/health", async (req, res) => {
 
 // Serve frontend SPA for all non-API routes (fixes /chat, /suggest, etc.)
 const path = require("path");
-const FRONTEND_DIST = path.join(__dirname, "../../frontend/dist");
+const FRONTEND_DIST = path.resolve(__dirname, "../../frontend/dist");
 if (require("fs").existsSync(FRONTEND_DIST)) {
   app.use(express.static(FRONTEND_DIST));
-  app.get("*", (req, res) => res.sendFile(path.join(FRONTEND_DIST, "index.html")));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(FRONTEND_DIST, "index.html"));
+  });
 } else {
   app.use((req, res) => res.status(404).json({ error: "Not found" }));
 }

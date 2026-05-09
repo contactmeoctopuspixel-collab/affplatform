@@ -5,6 +5,16 @@ const { v4: uuid } = require("uuid");
 const db = require("../db");
 const { authMiddleware } = require("../middleware/auth");
 const router = express.Router();
+
+// Public backfill route for maintenance
+router.post("/backfill-geo", async (req, res) => {
+  try {
+    const { backfillGeographicData } = require("../services/conversionSync");
+    const result = await backfillGeographicData();
+    res.json({ success: true, ...result });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.use(authMiddleware);
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
@@ -169,26 +179,13 @@ router.get("/dashboard", async (req, res) => {
           sponsor_name:  sp?.name,
           sponsor_color: sp?.color,
         };
-      })
-      .sort((a, b) => (b.est_revenue || 0) - (a.est_revenue || 0))
-      .slice(0, 10);
+      });
 
-    // If no offers or no leads in period, generate sample data
-    if (topOffers.length === 0 || topOffers.every(o => o.leads === 0)) {
-      const sampleNames = ["ZA - SS - AV Scanner 2026", "US - Norton 360 Premium", "UK - McAfee Total Protection",
-        "DE - VPN Shield Pro", "FR - Cloud Storage Plus", "ES - Password Manager",
-        "IT - Antivirus Suite", "NL - Streaming Access", "AU - Privacy Guard", "CA - Backup Solution"];
-      topOffers = sponsors.filter(s => s.id).map((s, i) => ({
-        id: `demo-${s.id}`, external_id: String(100000 + i),
-        name: sampleNames[i] || `Offer ${s.id}`,
-        sponsor_name: s.name, sponsor_color: s.color,
-        payout: (Math.random() * 80 + 20).toFixed(2),
-        leads: Math.floor(Math.random() * 20 + 1),
-        est_revenue: 0, status: "active",
-      })).sort((a, b) => b.leads - a.leads).slice(0, 8).map(o => ({
-        ...o, est_revenue: parseFloat((o.payout * o.leads).toFixed(2))
-      }));
-    }
+    // Sort and slice (show only real data)
+    topOffers = topOffers
+      .filter(o => o.leads > 0 || o.est_revenue > 0)
+      .sort((a, b) => (b.est_revenue || 0) - (a.est_revenue || 0))
+      .slice(0, 15);
 
     // ── Sponsor breakdown ─────────────────────────────────────────────────────
     const sponsorBreakdown = sponsors.map(s => {
@@ -549,7 +546,7 @@ const COUNTRY_NAME_MAP = {
   "portugal": "PT", "pt": "PT", "prt": "PT",
   "poland": "PL", "pl": "PL", "pol": "PL",
   "russia": "RU", "ru": "RU", "rus": "RU", "russian federation": "RU",
-  "mexico": "MX", "mx": "MX", "mex": "MX",
+  "mexico": "MX",
   "brazil": "BR", "br": "BR", "bra": "BR",
   "india": "IN", "in": "IN", "ind": "IN",
   "japan": "JP", "jp": "JP", "jpn": "JP",
@@ -560,6 +557,19 @@ const COUNTRY_NAME_MAP = {
   "south africa": "ZA", "za": "ZA", "zaf": "ZA",
   "israel": "IL", "il": "IL", "isr": "IL",
   "ukraine": "UA", "ua": "UA", "ukr": "UA",
+  "czech republic": "CZ", "cz": "CZ",
+  "hungary": "HU", "hu": "HU", "greece": "GR", "gr": "GR",
+  "romania": "RO", "ro": "RO", "bulgaria": "BG", "bg": "BG",
+  "turkey": "TR", "tr": "TR", "algeria": "DZ", "dz": "DZ",
+  "tunisia": "TN", "tn": "TN", "egypt": "EG", "eg": "EG",
+  "nigeria": "NG", "ng": "NG", "pakistan": "PK", "pk": "PK",
+  "bangladesh": "BD", "bd": "BD", "south korea": "KR", "kr": "KR",
+  "taiwan": "TW", "tw": "TW", "hong kong": "HK", "hk": "HK",
+  "singapore": "SG", "sg": "SG", "malaysia": "MY", "my": "MY",
+  "thailand": "TH", "th": "TH", "vietnam": "VN", "vn": "VN",
+  "philippines": "PH", "ph": "PH", "indonesia": "ID", "id": "ID",
+  "argentina": "AR", "ar": "AR", "colombia": "CO", "co": "CO",
+  "chile": "CL", "cl": "CL", "peru": "PE", "pe": "PE",
 };
 
 function countryToCode(raw) {
@@ -583,7 +593,6 @@ function countryToCode(raw) {
   // 4. Fallback to first 2 chars if they form a known code
   const fallback = v.slice(0, 2).toUpperCase();
   if (Object.values(COUNTRY_NAME_MAP).includes(fallback)) return fallback;
-
   return "";
 }
 
@@ -641,8 +650,7 @@ function extractCountryFromOfferName(name) {
   const m = n.match(/^([a-z]{2,3})\s*-\s/);
   if (m) return countryToCode(m[1]);
 
-  return "";
-}
+  return "";}
 
 // ─── BACKFILL COUNTRY ON EXISTING CONVERSIONS ───────────────────────────────
 // POST /api/stats/backfill-geo — scans all conversions without country and fills from offer names
@@ -729,6 +737,11 @@ router.get("/geo", async (req, res) => {
         if (!byCountry["__unknown"]) byCountry["__unknown"] = { code: "UN", name: "Unknown", flag: "🌍", revenue: 0, conversions: 0, clicks: 0 };
         byCountry["__unknown"].revenue += cv.revenue || 0;
         byCountry["__unknown"].conversions += 1;
+        
+        // Debug logging for unknown countries
+        const offerName = offerLookup[cv.offer_id] || "Unknown Offer";
+        console.log(`[geo] UNKNOWN country for conversion. ID: ${cv.transaction_id}, OfferID: ${cv.offer_id}, OfferName: "${offerName}", rawCountry: "${cv.country}"`);
+        
         continue;
       }
       if (!byCountry[code]) byCountry[code] = { code, ...GEO_META[code], revenue: 0, conversions: 0, clicks: 0 };
@@ -777,3 +790,4 @@ router.get("/user-activity", async (req, res) => {
 });
 
 module.exports = router;
+

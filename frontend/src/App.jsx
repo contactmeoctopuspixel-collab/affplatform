@@ -782,6 +782,7 @@ function DashboardPage() {
                       const numericId = ISO_ALPHA2_TO_NUMERIC[entry.code];
                       if (numericId) numericLookup[numericId] = entry;
                     });
+
                     return geographies.map((geo) => {
                       // Match by numeric ID — works for ALL countries including US/AU/NZ
                       const geoNumericId = String(geo.id || "");
@@ -791,8 +792,6 @@ function DashboardPage() {
                       const metricVal = d ? (d[actualMetric] || 0) : 0;
                       const maxMetric = Math.max(...geoData.geo.map(x => x[actualMetric] || 0), 1);
                       const intensity = d && metricVal > 0 ? 0.2 + (metricVal / maxMetric) * 0.8 : 0;
-                      
-                      // Using neon cyan variations for active, charcoal for inactive
                       
                       return (
                         <Geography
@@ -2782,3 +2781,4 @@ export default function App() {
     </>
   );
 }
+
