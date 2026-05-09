@@ -174,20 +174,27 @@ function extractOfferId(row) {
   return String(
     row.offer_id ?? row.network_offer_id ?? row["offer.id"] ??
     row.offer?.id ?? row.offer_id?.id ?? row.offer?._id ??
+    row.relationship?.offer?.network_offer_id ??
+    row.relationship?.offer?.offer_id ??
     ""
   ).trim();
 }
 function extractOfferName(row) {
   return String(
     row.offer_name ?? row.offer?.name ?? row.name ?? row["offer.name"] ??
-    row.offer_name?.name ?? ""
+    row.offer_name?.name ?? 
+    row.relationship?.offer?.name ?? 
+    row.relationship?.offer?.offer_name ??
+    ""
   ).trim();
 }
 function extractCountry(row) {
   return String(
     row.country ?? row.country_code ?? row.country_name ??
     row.geo_country ?? row.geo?.country ?? row["geo.country"] ??
-    row.offer?.country ?? ""
+    row.offer?.country ?? 
+    row.relationship?.offer?.country ??
+    ""
   ).trim();
 }
 

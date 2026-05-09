@@ -675,6 +675,8 @@ function countryToCode(raw) {
   if (!raw) return "";
   const v = String(raw).trim().toLowerCase();
   
+  if (v === "unknown" || v === "none" || v === "null") return "";
+
   // 1. Direct lookup in map
   if (COUNTRY_NAME_MAP[v]) return COUNTRY_NAME_MAP[v];
   
@@ -687,6 +689,12 @@ function countryToCode(raw) {
   if (upper === "NZL") return "NZ";
   if (upper === "GBR") return "GB";
   if (upper === "CAN") return "CA";
+  if (upper === "ESP") return "ES";
+  if (upper === "SWE") return "SE";
+  if (upper === "NLD") return "NL";
+  if (upper === "SP") return "ES";
+  if (upper === "SW") return "SE";
+  if (upper === "NE") return "NL";
 
   // 3. Try to find the key as a substring (for cases like "US - Norton")
   for (const [name, code] of Object.entries(COUNTRY_NAME_MAP)) {
