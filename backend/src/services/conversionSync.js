@@ -275,8 +275,13 @@ async function saveConversions(rows, sponsorName) {
     }
     const exists = await db.conversions.findOne({ transaction_id: txId });
     if (exists) {
-      if (!exists.country && country) {
-        await db.conversions.update({ _id: exists._id }, { $set: { country } });
+      const updates = {};
+      if ((!exists.offer_id || exists.offer_id === "") && rawOid) updates.offer_id = rawOid;
+      if ((!exists.offer_name || exists.offer_name === "") && offerName) updates.offer_name = offerName;
+      if ((!exists.country || exists.country === "Unknown") && country) updates.country = country;
+      
+      if (Object.keys(updates).length > 0) {
+        await db.conversions.update({ _id: exists._id }, { $set: updates });
       }
       continue;
     }
