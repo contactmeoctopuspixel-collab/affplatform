@@ -6,14 +6,7 @@ const db = require("../db");
 const { authMiddleware } = require("../middleware/auth");
 const router = express.Router();
 
-// Public backfill route for maintenance
-router.post("/backfill-geo", async (req, res) => {
-  try {
-    const { backfillGeographicData } = require("../services/conversionSync");
-    const result = await backfillGeographicData();
-    res.json({ success: true, ...result });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// Public maintenance routes moved here
 
 router.use(authMiddleware);
 

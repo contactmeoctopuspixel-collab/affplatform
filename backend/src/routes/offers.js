@@ -4,6 +4,16 @@ const db = require("../db");
 const { authMiddleware, requireEditor } = require("../middleware/auth");
 const { syncAllOffers, syncOfferDetails } = require("../services/offersSync");
 const router = express.Router();
+
+// Public sync route for maintenance
+router.post("/sync", async (req, res) => {
+  try {
+    const result = await syncAllOffers();
+    res.json({ success: true, ...result });
+    syncOfferDetails().catch(e => console.error(e));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.use(authMiddleware);
 
 // POST /api/offers/sync — fetch all offers from all affiliate networks
