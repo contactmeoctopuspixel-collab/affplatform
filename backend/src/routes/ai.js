@@ -25,26 +25,21 @@ router.get("/scaling", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/ai/sync-offers — import all offers from all sponsors (runs in background)
+// POST /api/ai/sync-offers — import all offers from all sponsors
 router.post("/sync-offers", requireEditor, async (req, res) => {
-  // Return immediately — sync runs in background to avoid nginx timeout
-  res.json({ ok: true, message: "Sync started in background — check logs" });
-
-  const { syncOfferDetails } = require("../services/offersSync");
-  const wss = req.app.get("wss");
   try {
     const result = await syncAllOffers();
-    if (wss) {
-      const msg = JSON.stringify({ type: "offers_synced", ...result });
-      wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
-    }
+    res.json(result);
     console.log(`✓ sync-offers done: ${result.totalImported} new, ${result.totalUpdated} updated`);
-    // Fetch tracking URLs in background
+    // Fetch tracking URLs in background (fire-and-forget)
+    const { syncOfferDetails } = require("../services/offersSync");
     syncOfferDetails().catch(e => console.error("syncOfferDetails:", e.message));
-    // Fetch from/subject/creatives from pxirbidlink in background
     const { syncAssetsFromPxirbid } = require("../services/pxirbidSync");
     syncAssetsFromPxirbid().catch(e => console.error("pxirbidSync:", e.message));
-  } catch (e) { console.error("sync-offers background error:", e.message); }
+  } catch (e) {
+    console.error("sync-offers error:", e.message);
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /api/ai/offer-suggestions?period=7d|mtd|30d|today&from=YYYY-MM-DD&to=YYYY-MM-DD

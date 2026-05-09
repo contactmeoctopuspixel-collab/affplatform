@@ -452,12 +452,10 @@ function DashboardPage() {
   const [err,         setErr]         = useState("");
   const [lastUpdate,  setLastUpdate]  = useState(null);
   const [pulse,       setPulse]       = useState(false);
-  const [dateFrom,    setDateFrom]    = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0,10);
-  });
+  const [dateFrom,    setDateFrom]    = useState(() => new Date().toISOString().slice(0,10));
   const [dateTo,      setDateTo]      = useState(() => new Date().toISOString().slice(0,10));
-  const [periodLabel, setPeriodLabel] = useState("Last 7 Days");
-  const [activePreset, setActivePreset] = useState("7d");
+  const [periodLabel, setPeriodLabel] = useState("Today");
+  const [activePreset, setActivePreset] = useState("today");
   const [filterSponsor, setFilterSponsor] = useState("");
   const [sponsors,    setSponsors]    = useState([]);
 
