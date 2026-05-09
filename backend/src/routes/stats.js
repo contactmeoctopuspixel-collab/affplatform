@@ -20,6 +20,8 @@ router.get("/dashboard", async (req, res) => {
     const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
     const fromDate = req.query.from || weekAgo;
     const toDate   = req.query.to   || today;
+    const fromStart = fromDate + "T00:00:00.000Z";
+    const toEnd    = toDate   + "T23:59:59.999Z";
 
     // ── Fetch real stats per sponsor from Everflow API ────────────────────────
     let totalRevenue = 0, totalClicks = 0, totalLeads = 0;
@@ -134,26 +136,34 @@ router.get("/dashboard", async (req, res) => {
       weeklyChart = Object.values(byDate);
     }
 
-    // ── Top offers — show best offers from active sponsors in period ──────────
+    // ── Top offers — real leads from selected date range ─────────────────────
     const offers = await db.offers.find({ status: "active" });
     const spMap  = Object.fromEntries(sponsors.map(s => [s.id, s]));
 
-    // Sponsors that had leads OR revenue in the period
-    const activeSponsorsInPeriod = new Set(
-      Object.entries(sponsorBreakdownMap)
-        .filter(([, v]) => v.leads > 0 || v.revenue > 0)
-        .map(([k]) => k)
-    );
+    // Count real leads per offer_id in the selected period
+    const periodConversions = await db.conversions.find({
+      created_at: { $gte: fromStart, $lte: toEnd },
+    });
+    const leadsByOffer = {};
+    for (const cv of periodConversions) {
+      const oid = cv.offer_id || "";
+      if (!oid) continue;
+      if (!leadsByOffer[oid]) leadsByOffer[oid] = { leads: 0, revenue: 0 };
+      leadsByOffer[oid].leads += 1;
+      leadsByOffer[oid].revenue += cv.revenue || 0;
+    }
 
     let topOffers = offers
       .filter(o => sponsors.some(s => s.id === o.sponsor_id))
       .map(o => {
         const sp = spMap[o.sponsor_id];
-        const leads = o.leads || Math.floor(Math.random() * 15) + 1;
+        const period = leadsByOffer[o.id] || leadsByOffer[o._id] || { leads: 0, revenue: 0 };
+        const leads = period.leads;
+        const estRev = period.revenue || (o.payout * leads);
         return {
           ...o,
           leads,
-          est_revenue:   o.payout * leads,
+          est_revenue:   estRev,
           sponsor_name:  sp?.name,
           sponsor_color: sp?.color,
         };
@@ -161,8 +171,8 @@ router.get("/dashboard", async (req, res) => {
       .sort((a, b) => (b.est_revenue || 0) - (a.est_revenue || 0))
       .slice(0, 10);
 
-    // If no offers in DB yet, generate sample offers from seeded sponsors
-    if (topOffers.length === 0) {
+    // If no offers or no leads in period, generate sample data
+    if (topOffers.length === 0 || topOffers.every(o => o.leads === 0)) {
       const sampleNames = ["ZA - SS - AV Scanner 2026", "US - Norton 360 Premium", "UK - McAfee Total Protection",
         "DE - VPN Shield Pro", "FR - Cloud Storage Plus", "ES - Password Manager",
         "IT - Antivirus Suite", "NL - Streaming Access", "AU - Privacy Guard", "CA - Backup Solution"];
@@ -543,14 +553,16 @@ router.get("/geo", async (req, res) => {
 
     const byCountry = {};
     for (const cv of conversions) {
-      // Use real country from conversion data if available, otherwise fallback
-      let code = (cv.country || "").toUpperCase().trim();
+      // Use real country from conversion data — NO sub3 fallback
+      const code = (cv.country || "").toUpperCase().trim();
       if (!code || !GEO_META[code]) {
-        const subId = parseInt(String(cv.sub3 || ""), 10);
-        const FALLBACK = { 2: "US", 3: "GB", 4: "CA", 5: "MA", 6: "FR", 7: "FR", 16: "AE", 17: "FR" };
-        code = FALLBACK[subId] || "US";
+        // Count as unknown (shown separately)
+        if (!byCountry["__unknown"]) byCountry["__unknown"] = { code: "UN", name: "Unknown", flag: "🌍", revenue: 0, conversions: 0, clicks: 0 };
+        byCountry["__unknown"].revenue += cv.revenue || 0;
+        byCountry["__unknown"].conversions += 1;
+        continue;
       }
-      if (!byCountry[code]) byCountry[code] = { code, ...(GEO_META[code] || { name: code, flag: "🌍" }), revenue: 0, conversions: 0, clicks: 0 };
+      if (!byCountry[code]) byCountry[code] = { code, ...GEO_META[code], revenue: 0, conversions: 0, clicks: 0 };
       byCountry[code].revenue += cv.revenue || 0;
       byCountry[code].conversions += 1;
     }

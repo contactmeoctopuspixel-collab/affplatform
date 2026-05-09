@@ -133,9 +133,6 @@ async function saveConversions(rows, sponsorName) {
     ).trim();
     if (!txId) continue;
 
-    const exists = await db.conversions.findOne({ transaction_id: txId });
-    if (exists) continue;
-
     const revenue = parseFloat(row.revenue ?? row.payout ?? 0);
     // Everflow returns unix timestamp in seconds as conversion_unix_timestamp
     let createdAt;
@@ -149,6 +146,15 @@ async function saveConversions(rows, sponsorName) {
     }
 
     const country = String(row.country || row.country_code || row.country_name || "").trim().toUpperCase().slice(0, 2) || "";
+
+    const exists = await db.conversions.findOne({ transaction_id: txId });
+    if (exists) {
+      // Backfill country on existing records that don't have it yet
+      if (!exists.country && country) {
+        await db.conversions.update({ _id: exists._id }, { $set: { country } });
+      }
+      continue;
+    }
 
     await db.conversions.insert({
       _id: txId,

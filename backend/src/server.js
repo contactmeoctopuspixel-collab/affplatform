@@ -65,10 +65,11 @@ app.use("/api/", rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 // URL: https://affplatform.alphalink.it.com/api/postback?sub3={sub3}&revenue={payout}&offer_id={network_offer_id}&transaction_id={transaction_id}&sponsor={affiliate_name}
 app.get("/api/postback", async (req, res) => {
   try {
-    const { sub3, revenue, offer_id, transaction_id, sponsor, event_type = "cv" } = req.query;
+    const { sub3, revenue, offer_id, transaction_id, sponsor, event_type = "cv", country } = req.query;
     if (!transaction_id) return res.status(400).send("missing transaction_id");
     const exists = await db.conversions.findOne({ transaction_id });
     if (exists) return res.send("ok duplicate");
+    const countryCode = (country || "").toUpperCase().trim().slice(0, 2) || "";
     await db.conversions.insert({
       _id: transaction_id,
       transaction_id,
@@ -77,6 +78,7 @@ app.get("/api/postback", async (req, res) => {
       offer_id: offer_id || "",
       sponsor:  sponsor || "",
       event_type,
+      country: countryCode,
       created_at: new Date().toISOString(),
     });
     // Push live event to WS clients
