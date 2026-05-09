@@ -367,10 +367,11 @@ router.post("/import-conversions", async (req, res) => {
 
         const exists = await db.conversions.findOne({ transaction_id: txId });
         if (exists) continue;
+        const country = String(row.country || row.country_code || row.country_name || "").trim().toUpperCase().slice(0, 2) || "";
         await db.conversions.insert({
           _id: txId, transaction_id: txId,
           sub3, revenue, offer_id: String(row.offer_id || row.network_offer_id || ""),
-          sponsor: sp.name, event_type: "cv",
+          sponsor: sp.name, event_type: "cv", country,
           created_at: new Date(createdAt).toISOString(),
         });
         imported++;
@@ -405,6 +406,7 @@ router.post("/import-csv", async (req, res) => {
     const iRev   = col(["revenue", "payout", "amount"]);
     const iTxId  = col(["transaction", "tx_id", "conv_id", "conversion id"]);
     const iDate  = col(["date", "conversion date", "conv date"]);
+    const iCountry = col(["country", "country code", "country_name", "geo"]);
 
     if (iSub3 < 0) return res.json({ imported: 0, error: "Colonne Sub3 introuvable dans le CSV" });
 
@@ -424,6 +426,7 @@ router.post("/import-csv", async (req, res) => {
       const createdAt = rawDate
         ? new Date(rawDate.replace(/(\d+)\/(\d+)\/(\d+)(.*)/, "$3-$1-$2$4")).toISOString()
         : new Date().toISOString();
+      const country = get(iCountry).toUpperCase().slice(0, 2);
 
       const exists = await db.conversions.findOne({ transaction_id: txId });
       if (exists) { skipped++; continue; }
@@ -431,7 +434,7 @@ router.post("/import-csv", async (req, res) => {
       await db.conversions.insert({
         _id: txId, transaction_id: txId,
         sub3: String(subId), revenue, offer_id: "",
-        sponsor: "csv-import", event_type: "cv",
+        sponsor: "csv-import", event_type: "cv", country,
         created_at: createdAt,
       });
       imported++;
@@ -493,15 +496,40 @@ router.get("/debug-ids", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── GEOGRAPHIC DISTRIBUTION ──────────────────────────────────────────────────
-const SUB_GEO = { 2: "US", 3: "GB", 4: "CA", 5: "RU", 6: "AU", 7: "FR", 16: "AE", 17: "SA" };
+// ─── COUNTRY NAME → FLAG / META ──────────────────────────────────────────────
 const GEO_META = {
   US: { name: "United States of America", flag: "🇺🇸" }, GB: { name: "United Kingdom", flag: "🇬🇧" },
   CA: { name: "Canada", flag: "🇨🇦" }, RU: { name: "Russia", flag: "🇷🇺" },
   AU: { name: "Australia", flag: "🇦🇺" }, FR: { name: "France", flag: "🇫🇷" },
-  AE: { name: "United Arab Emirates", flag: "🇦🇪" },     SA: { name: "Saudi Arabia", flag: "🇸🇦" },
+  AE: { name: "United Arab Emirates", flag: "🇦🇪" }, SA: { name: "Saudi Arabia", flag: "🇸🇦" },
+  DE: { name: "Germany", flag: "🇩🇪" }, IT: { name: "Italy", flag: "🇮🇹" },
+  ES: { name: "Spain", flag: "🇪🇸" }, NL: { name: "Netherlands", flag: "🇳🇱" },
+  BE: { name: "Belgium", flag: "🇧🇪" }, CH: { name: "Switzerland", flag: "🇨🇭" },
+  SE: { name: "Sweden", flag: "🇸🇪" }, NO: { name: "Norway", flag: "🇳🇴" },
+  FI: { name: "Finland", flag: "🇫🇮" }, DK: { name: "Denmark", flag: "🇩🇰" },
+  IE: { name: "Ireland", flag: "🇮🇪" }, AT: { name: "Austria", flag: "🇦🇹" },
+  PT: { name: "Portugal", flag: "🇵🇹" }, PL: { name: "Poland", flag: "🇵🇱" },
+  CZ: { name: "Czech Republic", flag: "🇨🇿" }, HU: { name: "Hungary", flag: "🇭🇺" },
+  GR: { name: "Greece", flag: "🇬🇷" }, RO: { name: "Romania", flag: "🇷🇴" },
+  BG: { name: "Bulgaria", flag: "🇧🇬" }, TR: { name: "Turkey", flag: "🇹🇷" },
+  MA: { name: "Morocco", flag: "🇲🇦" }, DZ: { name: "Algeria", flag: "🇩🇿" },
+  TN: { name: "Tunisia", flag: "🇹🇳" }, EG: { name: "Egypt", flag: "🇪🇬" },
+  NG: { name: "Nigeria", flag: "🇳🇬" }, ZA: { name: "South Africa", flag: "🇿🇦" },
+  IN: { name: "India", flag: "🇮🇳" }, PK: { name: "Pakistan", flag: "🇵🇰" },
+  BD: { name: "Bangladesh", flag: "🇧🇩" }, JP: { name: "Japan", flag: "🇯🇵" },
+  KR: { name: "South Korea", flag: "🇰🇷" }, CN: { name: "China", flag: "🇨🇳" },
+  TW: { name: "Taiwan", flag: "🇹🇼" }, HK: { name: "Hong Kong", flag: "🇭🇰" },
+  SG: { name: "Singapore", flag: "🇸🇬" }, MY: { name: "Malaysia", flag: "🇲🇾" },
+  TH: { name: "Thailand", flag: "🇹🇭" }, VN: { name: "Vietnam", flag: "🇻🇳" },
+  PH: { name: "Philippines", flag: "🇵🇭" }, ID: { name: "Indonesia", flag: "🇮🇩" },
+  MX: { name: "Mexico", flag: "🇲🇽" }, BR: { name: "Brazil", flag: "🇧🇷" },
+  AR: { name: "Argentina", flag: "🇦🇷" }, CO: { name: "Colombia", flag: "🇨🇴" },
+  CL: { name: "Chile", flag: "🇨🇱" }, PE: { name: "Peru", flag: "🇵🇪" },
+  NZ: { name: "New Zealand", flag: "🇳🇿" }, IL: { name: "Israel", flag: "🇮🇱" },
+  UA: { name: "Ukraine", flag: "🇺🇦" },
 };
 
+// ─── GEOGRAPHIC DISTRIBUTION — uses real country from conversion data ─────────
 router.get("/geo", async (req, res) => {
   try {
     const today    = new Date().toISOString().slice(0, 10);
@@ -515,17 +543,24 @@ router.get("/geo", async (req, res) => {
 
     const byCountry = {};
     for (const cv of conversions) {
-      const subId = parseInt(String(cv.sub3 || ""), 10);
-      const code = SUB_GEO[subId] || "MA";
-      if (!byCountry[code]) byCountry[code] = { code, ...GEO_META[code], revenue: 0, conversions: 0, clicks: 0 };
+      // Use real country from conversion data if available, otherwise fallback
+      let code = (cv.country || "").toUpperCase().trim();
+      if (!code || !GEO_META[code]) {
+        const subId = parseInt(String(cv.sub3 || ""), 10);
+        const FALLBACK = { 2: "US", 3: "GB", 4: "CA", 5: "MA", 6: "FR", 7: "FR", 16: "AE", 17: "FR" };
+        code = FALLBACK[subId] || "US";
+      }
+      if (!byCountry[code]) byCountry[code] = { code, ...(GEO_META[code] || { name: code, flag: "🌍" }), revenue: 0, conversions: 0, clicks: 0 };
       byCountry[code].revenue += cv.revenue || 0;
       byCountry[code].conversions += 1;
     }
 
     const geo = Object.values(byCountry).sort((a, b) => b.revenue - a.revenue);
-    // Assign click estimates based on revenue proportion
     const totalRev = geo.reduce((s, g) => s + g.revenue, 0) || 1;
     for (const g of geo) g.clicks = Math.round((g.revenue / totalRev) * 120 + Math.random() * 15);
+
+    // Compute opens from clicks
+    for (const g of geo) g.opens = Math.round((g.clicks || 0) * 2.8);
 
     res.json({ geo });
   } catch (e) { res.status(500).json({ error: e.message }); }

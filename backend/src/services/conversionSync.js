@@ -148,6 +148,8 @@ async function saveConversions(rows, sponsorName) {
       } catch { createdAt = new Date().toISOString(); }
     }
 
+    const country = String(row.country || row.country_code || row.country_name || "").trim().toUpperCase().slice(0, 2) || "";
+
     await db.conversions.insert({
       _id: txId,
       transaction_id: txId,
@@ -156,6 +158,7 @@ async function saveConversions(rows, sponsorName) {
       offer_id: String(row.offer_id ?? row.network_offer_id ?? ""),
       sponsor: sponsorName,
       event_type: "cv",
+      country,
       created_at: createdAt,
     });
     saved++;
