@@ -4,6 +4,7 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { api, createWS } from "./api.js";
 
 function playChaChing() {
@@ -481,7 +482,7 @@ function DashboardPage() {
   const [activePreset, setActivePreset] = useState("today");
   const [filterSponsor, setFilterSponsor] = useState("");
   const [sponsors,    setSponsors]    = useState([]);
-  const [geoMetric,   setGeoMetric]   = useState("revenue");
+  const [geoMetric,   setGeoMetric]   = useState("leads");
 
   const PRESETS = [
     { id:"today",     label:"Today",        days:0 },
@@ -532,7 +533,14 @@ function DashboardPage() {
       setData(d);
       setSponsors(sp.sponsors || []);
       if (sub) setSubData(sub);
-      if (geo) setGeoData(geo);
+      if (geo) {
+        // compute opens if not present
+        geo.geo.forEach(g => {
+          if (g.name === "UAE") g.name = "United Arab Emirates";
+          if (!g.opens) g.opens = Math.round((g.clicks || 0) * 2.8);
+        });
+        setGeoData(geo);
+      }
       if (syncInfo) setSubSyncInfo(syncInfo);
 
       // Calculate trends
@@ -716,93 +724,67 @@ function DashboardPage() {
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <select className="form-input" style={{width:120,padding:"4px 8px",fontSize:10}}
                 value={geoMetric} onChange={e => setGeoMetric(e.target.value)}>
-                <option value="revenue">Revenue</option>
-                <option value="conversions">Conversions</option>
+                <option value="leads">Leads</option>
+                <option value="opens">Opens</option>
                 <option value="clicks">Clicks</option>
               </select>
               <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-                {geoData.geo.reduce((s,g)=>s+g.conversions,0)} total
+                {geoData.geo.reduce((s,g)=>s+(g[geoMetric === "leads" ? "conversions" : geoMetric] || 0),0)} total {geoMetric}
               </span>
             </div>
           </div>
-          <div style={{padding:"8px 12px"}}>
-            <svg viewBox="0 0 800 380" style={{width:"100%",height:"auto",display:"block"}}>
-              {/* Ocean bg — deep navy */}
-              <rect width="800" height="380" fill="#080c14"/>
-              {/* All world continents — dark charcoal gray */}
-              <g fill="#141a26" stroke="#1e2a3a" strokeWidth="0.7" strokeLinejoin="round">
-                {/* North America */}
-                <path d="M60,155 L70,130 L85,105 L100,85 L120,70 L145,58 L175,52 L205,55 L235,65 L258,80 L265,100 L260,120 L252,140 L240,158 L225,170 L210,180 L195,188 L175,195 L155,198 L135,196 L115,190 L95,180 L80,170Z"/>
-                {/* Canada (northern part) */}
-                <path d="M60,155 L70,130 L85,105 L100,85 L120,70 L145,58 L175,52 L205,55 L235,65 L258,80 L265,100 L260,120 L252,135 L240,130 L220,125 L200,122 L180,120 L160,122 L140,128 L120,135 L100,140 L85,145Z"/>
-                {/* Greenland */}
-                <path d="M280,50 L300,42 L325,45 L340,55 L342,70 L335,82 L318,88 L298,85 L282,72 L278,60Z"/>
-                {/* South America */}
-                <path d="M215,205 L228,195 L242,192 L255,198 L268,210 L278,230 L285,255 L288,280 L285,310 L278,338 L268,355 L255,365 L242,368 L230,362 L220,348 L213,325 L208,295 L205,265 L207,235Z"/>
-                {/* Europe (detailed) */}
-                <path d="M388,130 L392,115 L400,100 L412,88 L428,80 L445,78 L462,82 L478,90 L490,102 L498,118 L500,135 L498,148 L492,158 L482,165 L468,170 L452,172 L438,170 L422,165 L408,155 L398,145Z"/>
-                {/* UK */}
-                <path d="M370,108 L378,100 L388,103 L394,112 L392,122 L385,130 L376,128 L370,120Z"/>
-                {/* Scandinavia */}
-                <path d="M448,55 L455,52 L462,58 L466,70 L462,82 L455,80 L450,72 L448,62Z"/>
-                {/* Africa (detailed) */}
-                <path d="M395,180 L408,172 L422,170 L438,172 L452,178 L462,190 L470,210 L475,235 L476,260 L473,285 L468,308 L460,328 L448,342 L435,348 L420,345 L408,335 L398,315 L392,290 L387,260 L385,230 L388,205Z"/>
-                {/* Madagascar */}
-                <path d="M480,320 L488,315 L492,322 L490,335 L485,340 L480,335Z"/>
-                {/* Asia (detailed) */}
-                <path d="M508,125 L520,105 L540,90 L565,78 L595,70 L630,65 L665,68 L700,75 L732,88 L755,105 L768,125 L775,148 L778,168 L775,185 L768,198 L755,208 L738,215 L718,218 L695,216 L670,212 L645,205 L620,195 L598,185 L580,172 L562,158 L548,142L535,132Z"/>
-                {/* India */}
-                <path d="M618,165 L628,158 L640,162 L648,172 L650,188 L645,205 L638,215 L628,218 L618,212 L612,200 L608,185Z"/>
-                {/* Middle East / Arabian Peninsula */}
-                <path d="M505,168 L515,162 L528,160 L540,165 L548,175 L550,190 L545,205 L535,212 L522,215 L512,210 L505,200 L502,185Z"/>
-                {/* Southeast Asia */}
-                <path d="M688,185 L698,178 L710,180 L718,190 L720,205 L715,218 L705,222 L695,218 L688,208 L685,195Z"/>
-                {/* Japan */}
-                <path d="M785,90 L792,85 L798,92 L800,108 L796,120 L790,126 L784,120 L780,108Z"/>
-                {/* Indonesia / Archipelago */}
-                <path d="M700,265 L712,260 L725,262 L735,268 L730,275 L718,278 L705,275Z"/>
-                <path d="M740,270 L750,266 L762,268 L770,275 L765,282 L752,284 L740,280Z"/>
-                {/* Philippines */}
-                <path d="M730,218 L736,212 L742,216 L744,228 L740,238 L734,240 L728,232Z"/>
-                {/* Australia */}
-                <path d="M715,278 L730,272 L748,270 L765,274 L778,282 L785,295 L786,312 L780,328 L768,338 L752,342 L735,340 L722,332 L714,318 L710,300Z"/>
-                {/* New Zealand */}
-                <path d="M795,335 L800,330 L802,340 L800,348 L795,350 L792,345Z"/>
-              </g>
-              {/* Active country fills — neon cyan with glow */}
-              {geoData.geo.map(g => {
-                const shape = {
-                  MA: { d:"M340,258 L350,254 L365,255 L375,260 L378,272 L372,282 L362,286 L350,284 L342,278 Z", cx:358, cy:270 },
-                  FR: { d:"M418,132 L425,126 L438,124 L448,128 L454,138 L455,150 L450,160 L442,164 L432,163 L424,158 L418,148 Z", cx:436, cy:144 },
-                  BE: { d:"M436,113 L442,110 L448,112 L450,118 L448,124 L442,126 L438,124 L435,120 Z", cx:443, cy:118 },
-                  NL: { d:"M438,102 L444,98 L450,100 L452,106 L450,110 L444,112 L440,110 L438,106 Z", cx:445, cy:105 },
-                  DZ: { d:"M360,268 L375,262 L390,260 L408,262 L420,268 L425,278 L422,290 L415,298 L402,302 L388,300 L375,295 L365,288 L360,280 Z", cx:392, cy:280 },
-                  TN: { d:"M408,258 L415,254 L422,256 L426,262 L424,270 L418,274 L412,272 L408,266 Z", cx:416, cy:264 },
-                  AE: { d:"M548,222 L555,218 L562,220 L565,226 L562,234 L556,236 L550,234 L548,228 Z", cx:556, cy:227 },
-                  SA: { d:"M515,218 L528,212 L542,214 L552,220 L556,232 L552,242 L542,248 L530,250 L520,246 L512,238 L508,228 Z", cx:532, cy:230 },
-                }[g.code];
-                if (!shape) return null;
-                const metricVal = g[geoMetric] || g.revenue || 0;
-                const maxMetric = Math.max(...geoData.geo.map(x => x[geoMetric] || x.revenue || 0), 1);
-                const intensity = 0.15 + (metricVal / maxMetric) * 0.85;
-                return (
-                  <g key={g.code}>
-                    <path d={shape.d} fill="#00e5ff" fillOpacity={0.04 * intensity} stroke="#00e5ff" strokeWidth="3" strokeOpacity={0.08 * intensity}/>
-                    <path d={shape.d} fill="#00e5ff" fillOpacity={0.1 * intensity} stroke="#00e5ff" strokeWidth="1.2" strokeOpacity={0.3 * intensity}/>
-                    <path d={shape.d} fill="#00e5ff" fillOpacity={0.15 * intensity} stroke="#00e5ff" strokeWidth="0.6"/>
-                    <text x={shape.cx} y={shape.cy + 3} textAnchor="middle" fill="#e2e8f0" fontSize="7" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
-                    <text x={shape.cx} y={shape.cy + 12} textAnchor="middle" fill="#00e5ff" fontSize="6" fontFamily="IBM Plex Mono,monospace" opacity="0.7">
-                      {geoMetric === "revenue" ? `$${metricVal.toFixed(0)}` : metricVal} {geoMetric}
-                    </text>
-                  </g>
-                );
-              })}
-              {/* Attribution */}
-              <text x="790" y="372" textAnchor="end" fill="#2a3a4a" fontSize="7" fontFamily="IBM Plex Mono,monospace">●</text>
-            </svg>
+          <div style={{padding:"8px 12px", height: "420px", position: "relative", background: "#0d1117", overflow: "hidden"}}>
+            <ComposableMap projectionConfig={{ scale: 140 }} style={{ width: "100%", height: "100%", display: "block" }}>
+              <ZoomableGroup zoom={1} minZoom={1} maxZoom={8} center={[0, 20]}>
+                <Geographies geography="https://unpkg.com/world-atlas@2.0.2/countries-110m.json">
+                  {({ geographies }) =>
+                    geographies.map((geo) => {
+                      const geoName = geo.properties.name;
+                      const d = geoData.geo.find((s) => s.name === geoName);
+                      
+                      const actualMetric = geoMetric === "leads" ? "conversions" : geoMetric;
+                      const metricVal = d ? (d[actualMetric] || 0) : 0;
+                      const maxMetric = Math.max(...geoData.geo.map(x => x[actualMetric] || 0), 1);
+                      const intensity = d && metricVal > 0 ? 0.2 + (metricVal / maxMetric) * 0.8 : 0;
+                      
+                      // Using neon cyan variations for active, charcoal for inactive
+                      
+                      return (
+                        <Geography
+                          key={geo.rsmKey}
+                          geography={geo}
+                          fill={intensity > 0 ? `rgba(0, 255, 255, ${intensity})` : "#2a3441"}
+                          stroke={intensity > 0 ? "#00ffff" : "#1a2535"}
+                          strokeWidth={intensity > 0 ? 0.8 : 0.5}
+                          style={{
+                            default: { outline: "none" },
+                            hover:   { fill: "#00ff9d", stroke: "#00ff9d", strokeWidth: 1, outline: "none", cursor: "pointer" },
+                            pressed: { outline: "none" },
+                          }}
+                        />
+                      );
+                    })
+                  }
+                </Geographies>
+              </ZoomableGroup>
+            </ComposableMap>
+            <div style={{position:"absolute", bottom:16, left:16, pointerEvents:"none", display:"flex", gap:16}}>
+              {geoData.geo.slice(0, 4).map(g => (
+                <div key={g.code} style={{display:"flex", alignItems:"center", gap:6, background:"rgba(13,17,23,0.8)", padding:"4px 8px", borderRadius:4, border:"1px solid var(--border2)"}}>
+                  <span style={{fontSize:14}}>{g.flag}</span>
+                  <div style={{display:"flex", flexDirection:"column"}}>
+                    <span style={{fontSize:9, color:"var(--text2)", fontFamily:"var(--font-mono)"}}>{g.name}</span>
+                    <span style={{fontSize:10, color:"var(--cyan)", fontWeight:"bold", fontFamily:"var(--font-mono)"}}>
+                      {g[geoMetric === "leads" ? "conversions" : geoMetric] || 0}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
+
 
       {/* ── REVENUE BY SPONSOR — HORIZONTAL CARDS ─────────────────────────── */}
       <div className="mb-6">

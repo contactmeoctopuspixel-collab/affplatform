@@ -494,12 +494,12 @@ router.get("/debug-ids", async (req, res) => {
 });
 
 // ─── GEOGRAPHIC DISTRIBUTION ──────────────────────────────────────────────────
-const SUB_GEO = { 2: "MA", 3: "FR", 4: "BE", 5: "NL", 6: "MA", 7: "FR", 16: "MA", 17: "FR" };
+const SUB_GEO = { 2: "US", 3: "GB", 4: "CA", 5: "RU", 6: "AU", 7: "FR", 16: "AE", 17: "SA" };
 const GEO_META = {
-  MA: { name: "Morocco", flag: "🇲🇦" }, FR: { name: "France", flag: "🇫🇷" },
-  BE: { name: "Belgium", flag: "🇧🇪" }, NL: { name: "Netherlands", flag: "🇳🇱" },
-  DZ: { name: "Algeria", flag: "🇩🇿" }, TN: { name: "Tunisia", flag: "🇹🇳" },
-  AE: { name: "UAE", flag: "🇦🇪" },     SA: { name: "Saudi Arabia", flag: "🇸🇦" },
+  US: { name: "United States of America", flag: "🇺🇸" }, GB: { name: "United Kingdom", flag: "🇬🇧" },
+  CA: { name: "Canada", flag: "🇨🇦" }, RU: { name: "Russia", flag: "🇷🇺" },
+  AU: { name: "Australia", flag: "🇦🇺" }, FR: { name: "France", flag: "🇫🇷" },
+  AE: { name: "United Arab Emirates", flag: "🇦🇪" },     SA: { name: "Saudi Arabia", flag: "🇸🇦" },
 };
 
 router.get("/geo", async (req, res) => {
