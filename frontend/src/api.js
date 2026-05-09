@@ -46,10 +46,10 @@ export const api = {
   deleteOffer: (id)          => req("DELETE", `/offers/${id}`),
 
   // Stats
-  dashboard:      (from, to) => req("GET", `/stats/dashboard?from=${from||''}&to=${to||''}`),
+  dashboard:      (from, to, sponsor) => req("GET", `/stats/dashboard?from=${from||''}&to=${to||''}${sponsor ? `&sponsor=${encodeURIComponent(sponsor)}` : ''}`),
   events:         (limit = 30) => req("GET", `/stats/events?limit=${limit}`),
   hourly:         () => req("GET", "/stats/hourly"),
-  subAffiliates:      (from, to) => req("GET",  `/stats/sub-affiliates?from=${from||''}&to=${to||''}`),
+  subAffiliates:      (from, to, sponsor) => req("GET",  `/stats/sub-affiliates?from=${from||''}&to=${to||''}${sponsor ? `&sponsor=${encodeURIComponent(sponsor)}` : ''}`),
   convSyncStatus:     ()         => req("GET",  "/stats/conv-sync-status"),
   convSyncNow:        ()         => req("POST", "/stats/conv-sync-now"),
 
@@ -67,7 +67,7 @@ export const api = {
   offerSuggestions: () => req("GET", "/ai/offer-suggestions"),
 
   // Geo
-  geoDistribution: (from, to) => req("GET", `/stats/geo?from=${from||''}&to=${to||''}`),
+  geoDistribution: (from, to, sponsor) => req("GET", `/stats/geo?from=${from||''}&to=${to||''}${sponsor ? `&sponsor=${encodeURIComponent(sponsor)}` : ''}`),
 
   // Health
   health: () => req("GET", "/health"),

@@ -563,12 +563,12 @@ function DashboardPage() {
       const prevFrom = new Date(new Date(dateFrom).getTime() - rangeMs).toISOString().slice(0, 10);
 
       const [d, sub, syncInfo, sp, geo, prevDash] = await Promise.all([
-        api.dashboard(dateFrom, dateTo),
-        api.subAffiliates(dateFrom, dateTo).catch(() => null),
+        api.dashboard(dateFrom, dateTo, filterSponsor),
+        api.subAffiliates(dateFrom, dateTo, filterSponsor).catch(() => null),
         api.convSyncStatus().catch(() => null),
         api.getSponsors().catch(() => ({ sponsors: [] })),
-        api.geoDistribution(dateFrom, dateTo).catch(() => null),
-        api.dashboard(prevFrom, prevTo).catch(() => null),
+        api.geoDistribution(dateFrom, dateTo, filterSponsor).catch(() => null),
+        api.dashboard(prevFrom, prevTo, filterSponsor).catch(() => null),
       ]);
 
       setData(d);
@@ -600,7 +600,7 @@ function DashboardPage() {
       setPulse(true);
       setTimeout(() => setPulse(false), 600);
     } catch (e) { setErr(e.message); }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, filterSponsor]);
 
   useEffect(() => { load(); }, [load]);
 

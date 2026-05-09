@@ -143,12 +143,17 @@ router.get("/dashboard", async (req, res) => {
     const toDate   = req.query.to   || today;
     const fromStart = fromDate + "T00:00:00.000Z";
     const toEnd    = toDate   + "T23:59:59.999Z";
+    const filterSponsor = req.query.sponsor;
 
     // ── Fetch real stats per sponsor from Everflow API ────────────────────────
     let totalRevenue = 0, totalClicks = 0, totalLeads = 0;
     const sponsorBreakdownMap = {};
 
-    for (const sp of sponsors) {
+    const filteredSponsors = filterSponsor 
+      ? sponsors.filter(s => s.name === filterSponsor || s.id === filterSponsor)
+      : sponsors;
+
+    for (const sp of filteredSponsors) {
       if (!sp.api_key || sp.platform === "adsurf") {
         sponsorBreakdownMap[sp.id] = { revenue: 0, clicks: 0, leads: 0 };
         continue;
@@ -397,15 +402,21 @@ router.get("/sub-affiliates", async (req, res) => {
 
     const toEnd    = toDate   + "T23:59:59.999Z";
     const fromStart = fromDate + "T00:00:00.000Z";
+    const filterSponsor = req.query.sponsor;
 
     // Fetch conversions (leads) and click events for the period
-    const conversions = await db.conversions.find({
-      created_at: { $gte: fromStart, $lte: toEnd },
-    });
-    const clickEvents = await db.events.find({
+    const convQuery = { created_at: { $gte: fromStart, $lte: toEnd } };
+    if (filterSponsor) convQuery.sponsor = filterSponsor;
+
+    const conversions = await db.conversions.find(convQuery);
+    
+    const clickQuery = {
       created_at: { $gte: fromStart, $lte: toEnd },
       event_type: "click",
-    });
+    };
+    if (filterSponsor) clickQuery.sponsor = filterSponsor;
+
+    const clickEvents = await db.events.find(clickQuery);
 
     // Initialize ALL sub-affiliates with zero — always show everyone
     const totals = {};
@@ -768,7 +779,7 @@ function countryToCode(raw) {
   if (v.includes("netherlands") || v.includes(" nld") || v.includes(" ne-") || v === "ne") return "NL";
   if (v.includes("sweden") || v.includes(" swe") || v.includes(" sw-") || v === "sw") return "SE";
   if (v.includes("spain") || v.includes(" esp") || v.includes(" sp-") || v === "sp") return "ES";
-  if (v.includes("philippines") || v === "ph") return "PH";
+  // Removed PH as requested by user
 
   // 5. Fallback to first 2 chars if they form a known code
   const fallback = v.slice(0, 2).toUpperCase();
@@ -846,7 +857,12 @@ router.get("/geo", async (req, res) => {
 
     const toEnd    = toDate   + "T23:59:59.999Z";
     const fromStart = fromDate + "T00:00:00.000Z";
-    const conversions = await db.conversions.find({ created_at: { $gte: fromStart, $lte: toEnd } });
+    const filterSponsor = req.query.sponsor;
+
+    const query = { created_at: { $gte: fromStart, $lte: toEnd } };
+    if (filterSponsor) query.sponsor = filterSponsor;
+
+    const conversions = await db.conversions.find(query);
 
     // Load all offers for lookups
     const allOffers = await db.offers.find({});
@@ -901,7 +917,9 @@ router.get("/geo", async (req, res) => {
       // Tier 5: Forensic Real-time Scan
       if (!code || code === "Unknown") {
         const forensicStr = (String(cv._id || "") + String(cv.transaction_id || "") + String(cv.offer_name || "") + String(cv.sponsor || "")).toLowerCase();
-        if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance")) code = "AU";
+        const rawCountry = String(cv.country || "").toUpperCase();
+
+        if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance") || rawCountry === "PH") code = "AU";
         else if (forensicStr.includes("nz") || forensicStr.includes("new zealand") || forensicStr.includes("cloud storage")) code = "NZ";
         else if (forensicStr.includes("us") || forensicStr.includes("united states")) code = "US";
       }
