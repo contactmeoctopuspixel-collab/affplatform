@@ -278,8 +278,10 @@ async function saveConversions(rows, sponsorName) {
       _id: txId, transaction_id: txId,
       sub3: String(subId), revenue,
       offer_id: rawOid,
-      sponsor: sponsorName, event_type: "cv", country,
-      created_at: createdAt,
+      offer_name: offerName,
+      sponsor: sponsorName,
+      country: country || "Unknown",
+      created_at: createdAt
     });
     saved++;
     newItems.push({ mailerName: SUB_NAMES[subId], mailerId: subId, revenue, txId });

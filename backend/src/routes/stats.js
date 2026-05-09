@@ -24,30 +24,22 @@ router.post("/backfill-geo", async (req, res) => {
     });
 
     let updated = 0;
+    console.log(`[backfill] Checking ${conversions.length} unknown conversions...`);
     for (const cv of conversions) {
-      const oMeta = offerMap[cv.offer_id] || { name: "", country: "" };
+      const oid = String(cv.offer_id || "");
+      const oMeta = offerMap[oid] || { name: cv.offer_name || "", country: "" };
+      
       let code = oMeta.country;
       if (!code) code = extractCountryFromName(oMeta.name);
-      if (!code) code = countryToCode(cv.offer_id);
+      if (!code) code = countryToCode(oid);
       if (!code) code = countryToCode(cv.sub3);
       
       if (code && code.toUpperCase() !== "UNKNOWN") {
         await db.conversions.update({ _id: cv._id }, { $set: { country: code.toUpperCase() } });
         updated++;
-      } else {
-        // Final desperate attempt: check for [US], (AU), _NZ etc in offer name
-        const n = (oMeta.name || "").toLowerCase();
-        let desperateCode = "";
-        if (n.includes("[us]") || n.includes("(us)") || n.includes("_us")) desperateCode = "US";
-        else if (n.includes("[au]") || n.includes("(au)") || n.includes("_au")) desperateCode = "AU";
-        else if (n.includes("[nz]") || n.includes("(nz)") || n.includes("_nz")) desperateCode = "NZ";
-        
-        if (desperateCode) {
-           await db.conversions.update({ _id: cv._id }, { $set: { country: desperateCode } });
-           updated++;
-        }
       }
     }
+    console.log(`[backfill] Done. Updated ${updated} records.`);
     res.json({ success: true, checked: conversions.length, updated });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -520,14 +512,19 @@ router.post("/import-csv", async (req, res) => {
         ? new Date(rawDate.replace(/(\d+)\/(\d+)\/(\d+)(.*)/, "$3-$1-$2$4")).toISOString()
         : new Date().toISOString();
       const country = countryToCode(get(iCountry));
+      const offerName = get(iOffer);
+      const rawOid = "";
 
       const exists = await db.conversions.findOne({ transaction_id: txId });
       if (exists) { skipped++; continue; }
 
       await db.conversions.insert({
         _id: txId, transaction_id: txId,
-        sub3: String(subId), revenue, offer_id: "",
-        sponsor: "csv-import", event_type: "cv", country,
+        sub3: String(subId), revenue,
+        offer_id: rawOid,
+        offer_name: offerName,
+        sponsor: sponsorName || "csv-import",
+        country: country || "Unknown",
         created_at: createdAt,
       });
       imported++;
