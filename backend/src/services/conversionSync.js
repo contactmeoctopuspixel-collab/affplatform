@@ -369,5 +369,56 @@ async function backfillGeographicData() {
   return { total: conversions.length, fixed };
 }
 
-module.exports = { syncConversions, backfillGeographicData, SUB_NAMES };
+async function aggressiveOfferRepair() {
+  try {
+    const blindConvs = await db.conversions.find({ 
+      $or: [ { offer_id: "" }, { offer_id: { $exists: false } } ] 
+    });
+    console.log(`[nuclear-repair] Attempting to recover ${blindConvs.length} blind leads...`);
+    
+    // Get the first available Everflow API key
+    const sponsors = await db.sponsors.find({ api_key: { $exists: true, $ne: "" } });
+    const apiKey = sponsors[0]?.api_key;
+    if (!apiKey) return { error: "No Everflow API key found in sponsors" };
+
+    let recovered = 0;
+    for (const cv of blindConvs) {
+      // Use the specific conversion reporting endpoint
+      const url = `https://api.eflow.team/v1/networks/reporting/conversions/${cv._id}`;
+      const res = await fetch(url, {
+        headers: { "X-Eflow-API-Key": apiKey }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // The API returns the row at the root or under 'conversion'
+        const row = data.conversion || data;
+        const offerId = extractOfferId(row);
+        const offerName = extractOfferName(row);
+        const country = countryToCode(extractCountry(row));
+        
+        if (offerId || country) {
+          await db.conversions.update({ _id: cv._id }, { 
+            $set: { 
+              offer_id: offerId, 
+              offer_name: offerName, 
+              country: (country && country !== "Unknown") ? country : cv.country 
+            } 
+          });
+          recovered++;
+        }
+      }
+    }
+    return { success: true, checked: blindConvs.length, recovered };
+  } catch (e) {
+    console.error("[nuclear-repair] error:", e);
+    return { error: e.message };
+  }
+}
+
+module.exports = {
+  syncConversions,
+  backfillGeographicData,
+  aggressiveOfferRepair,
+  SUB_NAMES
+};
 

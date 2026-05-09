@@ -96,6 +96,15 @@ router.post("/backfill-geo", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Nuclear Repair — force re-fetch metadata for leads with empty offer_id
+router.post("/aggressive-repair", async (req, res) => {
+  try {
+    const conversionSync = require("../services/conversionSync");
+    const result = await conversionSync.aggressiveOfferRepair();
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Deep Sync — pull last 90 days of conversions
 router.post("/sync-conversions-deep", async (req, res) => {
   try {
