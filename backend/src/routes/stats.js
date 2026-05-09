@@ -8,10 +8,17 @@ const router = express.Router();
 
 router.get("/audit-geo", async (req, res) => {
   try {
-    const convs = await db.conversions.find({}).limit(50);
-    const offers = await db.offers.find({}).limit(50);
+    const convs = await db.conversions.find({}).limit(100);
+    const offers = await db.offers.find({}).limit(100);
     res.json({
-      conversions: convs.map(c => ({ id: c._id, offer_id: c.offer_id, name: c.offer_name, country: c.country })),
+      conversions: convs.map(c => ({ 
+        id: c._id, 
+        offer_id: c.offer_id, 
+        name: c.offer_name, 
+        country: c.country,
+        sponsor: c.sponsor,
+        sub3: c.sub3 
+      })),
       offers: offers.map(o => ({ id: o.id, ext: o.external_id, name: o.name, country: o.country }))
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -43,19 +50,26 @@ router.post("/backfill-geo", async (req, res) => {
       const oid = String(cv.offer_id || "");
       const oMeta = offerMap[oid] || { name: cv.offer_name || "", country: "" };
       
-      let code = oMeta.country;
+      let code = "";
+      
+      // 1. Check Offer Metadata
+      if (oMeta.country && oMeta.country !== "Unknown") code = oMeta.country;
+      
+      // 2. Normalize existing country field (Fixes SW -> SE, NE -> NL)
+      if (!code || code === "Unknown") code = countryToCode(cv.country);
+      
+      // 3. Extract from names/tags
       if (!code || code === "Unknown") code = extractCountryFromName(oMeta.name);
-      if (!code || code === "Unknown") code = countryToCode(oid);
-      if (!code || code === "Unknown") code = countryToCode(cv.sub3);
       if (!code || code === "Unknown") code = countryToCode(cv.offer_name);
+      if (!code || code === "Unknown") code = countryToCode(cv.sub3);
       if (!code || code === "Unknown") code = countryToCode(cv.sponsor);
       
-      // Forensic: check transaction ID or ID itself for signatures
+      // 4. Forensic Scan
       if (!code || code === "Unknown") {
-        const forensicStr = String(cv._id || "") + String(cv.transaction_id || "");
-        if (forensicStr.toLowerCase().includes("au")) code = "AU";
-        if (forensicStr.toLowerCase().includes("nz")) code = "NZ";
-        if (forensicStr.toLowerCase().includes("us")) code = "US";
+        const forensicStr = (String(cv._id || "") + String(cv.transaction_id || "") + String(cv.offer_name || "")).toLowerCase();
+        if (forensicStr.includes("au") || forensicStr.includes("australia") || forensicStr.includes("st john ambulance")) code = "AU";
+        else if (forensicStr.includes("nz") || forensicStr.includes("new zealand") || forensicStr.includes("cloud storage")) code = "NZ";
+        else if (forensicStr.includes("us") || forensicStr.includes("united states")) code = "US";
       }
       
       if (code && code.toUpperCase() !== "UNKNOWN" && code.toUpperCase() !== (cv.country || "").toUpperCase()) {
@@ -724,10 +738,14 @@ function countryToCode(raw) {
   
   // 4. Fallback to common patterns (High Priority for US/AU/NZ/GB/CA)
   if (v.includes("united states") || v.includes(" usa") || v.includes("[us]") || v.includes("_us") || v.startsWith("us-")) return "US";
-  if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au") || v.startsWith("au-")) return "AU";
-  if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz") || v.startsWith("nz-")) return "NZ";
+  if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au") || v.startsWith("au-") || v.includes("st john ambulance")) return "AU";
+  if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz") || v.startsWith("nz-") || v.includes("cloud storage flow")) return "NZ";
   if (v.includes("united kingdom") || v.includes(" uk") || v.includes("[gb]") || v.includes("_gb") || v.startsWith("gb-")) return "GB";
   if (v.includes("canada") || v.includes(" ca") || v.includes("[ca]") || v.includes("_ca")) return "CA";
+  if (v.includes("netherlands") || v.includes(" nld") || v.includes(" ne-") || v === "ne") return "NL";
+  if (v.includes("sweden") || v.includes(" swe") || v.includes(" sw-") || v === "sw") return "SE";
+  if (v.includes("spain") || v.includes(" esp") || v.includes(" sp-") || v === "sp") return "ES";
+  if (v.includes("philippines") || v === "ph") return "PH";
 
   // 5. Fallback to first 2 chars if they form a known code
   const fallback = v.slice(0, 2).toUpperCase();
