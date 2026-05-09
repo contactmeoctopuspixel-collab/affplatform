@@ -107,7 +107,7 @@ async function fetchEflowDashboard(apiKey) {
       return 0;
     };
 
-    return {
+    const result = {
       success: true,
       data: {
         clicks:  pick(data.click),
@@ -139,7 +139,9 @@ async function fetchEflowDashboard(apiKey) {
       if (odata && odata.offers) {
         result.data.offers = odata.offers;
       }
-    } catch {}
+    } catch (e) {
+      console.log("[apiProxy] Failed to fetch offers for dashboard:", e.message);
+    }
 
     return result;
   } catch (e) {

@@ -315,5 +315,39 @@ async function syncConversions(daysBack = 30) {
   return { totalSaved, allNewItems };
 }
 
-module.exports = { syncConversions, SUB_NAMES };
+// Re-run country detection on all conversions that are missing it
+async function backfillGeographicData() {
+  const conversions = await db.conversions.find({ country: { $in: ["", null, "Unknown", "unknown"] } });
+  const allOffers = await db.offers.find({});
+  const offerNameByRawId = {};
+  for (const o of allOffers) {
+    const raw = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
+    if (raw && o.name && !offerNameByRawId[raw]) offerNameByRawId[raw] = o.name;
+  }
+
+  let fixed = 0;
+  for (const conv of conversions) {
+    let country = "";
+    const offerName = offerNameByRawId[conv.offer_id] || "";
+    if (offerName) {
+      const lowOfferName = offerName.toLowerCase();
+      const sortedKeys = Object.keys(COUNTRY_NAME_MAP).sort((a, b) => b.length - a.length);
+      for (const key of sortedKeys) {
+        const regex = new RegExp(`(^|[^a-z])${key.replace('.', '\\.')}([^a-z]|$)`, 'i');
+        if (regex.test(lowOfferName)) {
+          country = COUNTRY_NAME_MAP[key];
+          break;
+        }
+      }
+    }
+
+    if (country) {
+      await db.conversions.update({ _id: conv._id }, { $set: { country } });
+      fixed++;
+    }
+  }
+  return { total: conversions.length, fixed };
+}
+
+module.exports = { syncConversions, backfillGeographicData, SUB_NAMES };
 
