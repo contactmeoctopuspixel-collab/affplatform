@@ -146,18 +146,18 @@ router.get("/dashboard", async (req, res) => {
     );
 
     const topOffers = offers
-      .filter(o => (o.leads || 0) > 0 && activeSponsorsInPeriod.has(o.sponsor_id))
+      .filter(o => activeSponsorsInPeriod.has(o.sponsor_id) || sponsors.some(s => s.id === o.sponsor_id))
       .map(o => {
         const sp = spMap[o.sponsor_id];
         return {
           ...o,
-          est_revenue:   o.payout * o.leads,
+          est_revenue:   o.payout * (o.leads || 0),
           sponsor_name:  sp?.name,
           sponsor_color: sp?.color,
         };
       })
-      .sort((a, b) => b.est_revenue - a.est_revenue)
-      .slice(0, 5);
+      .sort((a, b) => (b.est_revenue || 0) - (a.est_revenue || 0))
+      .slice(0, 10);
 
     // ── Sponsor breakdown ─────────────────────────────────────────────────────
     const sponsorBreakdown = sponsors.map(s => {
