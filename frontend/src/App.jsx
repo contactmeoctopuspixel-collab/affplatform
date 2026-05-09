@@ -6,6 +6,29 @@ import {
 } from "recharts";
 import { api, createWS } from "./api.js";
 
+function playChaChing() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.12, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    const o1 = ctx.createOscillator();
+    o1.type = "sine";
+    o1.frequency.setValueAtTime(880, now);
+    o1.connect(g);
+    o1.start(now);
+    o1.stop(now + 0.1);
+    const o2 = ctx.createOscillator();
+    o2.type = "sine";
+    o2.frequency.setValueAtTime(1320, now + 0.08);
+    o2.connect(g);
+    o2.start(now + 0.08);
+    o2.stop(now + 0.3);
+  } catch {}
+}
+
 // ─── FONTS ────────────────────────────────────────────────────────────────────
 const lnk = document.createElement("link");
 lnk.rel = "stylesheet";
@@ -2495,6 +2518,7 @@ export default function App() {
         setNotifications(p => [notif, ...p.slice(0, 49)]);
         setUnreadCount(p => p + 1);
         sendNotification(notif.title, notif.body, notif.color);
+        playChaChing();
       }
 
       // 4. Chat + Typing — dispatch to ChatPage
