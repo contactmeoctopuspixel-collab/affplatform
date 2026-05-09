@@ -830,7 +830,6 @@ function DashboardPage() {
             </button>
           </div>
         </div>
-        {subData?.sub_affiliates?.length > 0 ? (
           <div className="tbl-wrap">
             <table>
               <thead>
@@ -845,10 +844,11 @@ function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {subData.sub_affiliates.map((s, i) => {
+                {subData?.sub_affiliates?.length > 0 ? subData.sub_affiliates.map((s, i) => {
                   const trophies = ["🥇", "🥈", "🥉"];
-                  const maxLeads = subData.sub_affiliates[0]?.leads || 1;
-                  const barPct = (s.leads / maxLeads * 100).toFixed(0);
+                  const maxScore = Math.max(...subData.sub_affiliates.map(x => Math.max(x.leads||0, x.clicks||0, x.opens||0)), 1);
+                  const barVal = Math.max(s.leads||0, s.clicks||0, s.opens||0);
+                  const barPct = (barVal / maxScore * 100).toFixed(0);
                   return (
                     <tr key={s.id}>
                       <td style={{fontSize:18,textAlign:"center"}}>{trophies[i] || `#${i+1}`}</td>
@@ -858,16 +858,20 @@ function DashboardPage() {
                       <td className="mono">{s.clicks || 0}</td>
                       <td>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span className="mono" style={{color:"var(--cyan)",fontWeight:700,minWidth:28}}>{s.leads}</span>
+                          <span className="mono" style={{color:"var(--cyan)",fontWeight:700,minWidth:28}}>{s.leads || 0}</span>
                           <div style={{flex:1,height:4,background:"var(--bg3)",borderRadius:2,overflow:"hidden",minWidth:50}}>
                             <div style={{height:"100%",width:`${barPct}%`,background: trophies[i] ? `linear-gradient(90deg, #ffd700, #ffed4a)` : "var(--cyan)",borderRadius:2,transition:"width .6s ease"}}/>
                           </div>
                         </div>
                       </td>
-                      <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(s.revenue).toFixed(2)}</td>
+                      <td className="mono" style={{color:"var(--green)",fontWeight:700}}>${Number(s.revenue||0).toFixed(2)}</td>
                     </tr>
                   );
-                })}
+                }) : (
+                  <tr><td colSpan={7} style={{textAlign:"center",padding:"24px",fontFamily:"var(--font-mono)",fontSize:11,color:"var(--text2)"}}>
+                    No data yet — sync conversions or wait for auto-sync
+                  </td></tr>
+                )}
               </tbody>
             </table>
             {subData?.total_in_db > 0 && (
@@ -875,15 +879,6 @@ function DashboardPage() {
                 {subData.total_conversions} conversions in this period · {subData.total_in_db} total in DB
               </div>
             )}
-          </div>
-        ) : (
-          <div style={{padding:"20px",textAlign:"center"}}>
-            <div style={{fontSize:13,color:"var(--text2)",marginBottom:8}}>
-              No conversions found for this period.
-            </div>
-            <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--font-mono)"}}>
-              Auto-sync runs every 15 min · Click "Sync Now" to fetch immediately
-            </div>
           </div>
         )}
       </div>
