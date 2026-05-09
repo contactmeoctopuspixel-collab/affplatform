@@ -803,8 +803,6 @@ function DashboardPage() {
                           geography={geo}
                           onMouseEnter={() => {
                             const countryNameFromGeo = geo.properties?.name || "Unknown Region";
-                            const d = data.find((s) => String(ISO_ALPHA2_TO_NUMERIC[s.code]) === String(geo.id) || s.code === String(geo.id));
-                            const metricVal = d ? (geoMetric === "leads" ? d.conversions : d.revenue) : 0;
                             const label = d ? `${d.flag} ${d.name}` : `📍 ${countryNameFromGeo}`;
                             const valStr = geoMetric === "leads" ? `${metricVal} Leads` : `$${Number(metricVal).toFixed(2)}`;
                             setTooltip(`${label} — ${valStr}`);
