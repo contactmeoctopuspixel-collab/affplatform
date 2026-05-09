@@ -376,8 +376,20 @@ router.post("/import-conversions", async (req, res) => {
         const createdAt = row.conversion_date || row.created_at || new Date().toISOString();
 
         const exists = await db.conversions.findOne({ transaction_id: txId });
-        if (exists) continue;
-        const country = countryToCode(row.country || row.country_code || row.country_name || "");
+        if (exists) {
+          // Backfill country if missing
+          if (!exists.country) {
+            const c = countryToCode(row.country || row.country_code || row.country_name || "");
+            if (c) await db.conversions.update({ _id: exists._id }, { $set: { country: c } });
+          }
+          continue;
+        }
+        let country = countryToCode(row.country || row.country_code || row.country_name || "");
+        if (!country) {
+          const offerName = String(row.offer_name || row.name || "");
+          const m = offerName.match(/^([A-Za-z]{2})\s*-\s/);
+          if (m) country = countryToCode(m[1]);
+        }
         await db.conversions.insert({
           _id: txId, transaction_id: txId,
           sub3, revenue, offer_id: String(row.offer_id || row.network_offer_id || ""),
@@ -598,10 +610,24 @@ router.get("/geo", async (req, res) => {
     const fromStart = fromDate + "T00:00:00.000Z";
     const conversions = await db.conversions.find({ created_at: { $gte: fromStart, $lte: toEnd } });
 
+    // Build offer name→ID map for extracting country from offer names
+    const allOffers = await db.offers.find({});
+    const offerNameMap = {};
+    for (const o of allOffers) {
+      if (o.name) offerNameMap[o.id] = o.name;
+      if (o._id) offerNameMap[o._id] = o.name;
+    }
+
     const byCountry = {};
     for (const cv of conversions) {
-      // Use real country from conversion data — NO sub3 fallback
-      const code = countryToCode(cv.country);
+      // 1. Try stored country field
+      let code = countryToCode(cv.country);
+      // 2. Fallback: extract country from offer name (e.g. "US - ...", "NO - ...")
+      if (!code || !GEO_META[code]) {
+        const offerName = offerNameMap[cv.offer_id] || "";
+        const offerMatch = offerName.match(/^([A-Z]{2})\s*-\s/);
+        if (offerMatch) code = countryToCode(offerMatch[1]);
+      }
       if (!code || !GEO_META[code]) {
         // Count as unknown (shown separately)
         if (!byCountry["__unknown"]) byCountry["__unknown"] = { code: "UN", name: "Unknown", flag: "🌍", revenue: 0, conversions: 0, clicks: 0 };

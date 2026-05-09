@@ -166,7 +166,16 @@ async function saveConversions(rows, sponsorName) {
       } catch { createdAt = new Date().toISOString(); }
     }
 
-    const rawCountry = String(row.country || row.country_code || row.country_name || "").trim();
+    let rawCountry = String(row.country || row.country_code || row.country_name || "").trim();
+    // If no country from API, try extracting from offer name (e.g. "US - Pre-Lander...")
+    if (!rawCountry && row.offer_name) {
+      const m = String(row.offer_name).match(/^([A-Za-z]{2})\s*-\s/);
+      if (m) rawCountry = m[1];
+    }
+    if (!rawCountry && row.name) {
+      const m = String(row.name).match(/^([A-Za-z]{2})\s*-\s/);
+      if (m) rawCountry = m[1];
+    }
     const country = COUNTRY_NAME_MAP[rawCountry.toLowerCase()] || rawCountry.slice(0, 2).toUpperCase() || "";
 
     const exists = await db.conversions.findOne({ transaction_id: txId });
