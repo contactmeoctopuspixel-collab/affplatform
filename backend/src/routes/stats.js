@@ -602,10 +602,12 @@ function countryToCode(raw) {
     if (v.includes(name)) return code;
   }
   
-  // 4. Fallback to common patterns
-  if (v.startsWith("us") || v.endsWith("_us") || v.includes("-us")) return "US";
-  if (v.startsWith("au") || v.endsWith("_au") || v.includes("-au")) return "AU";
-  if (v.startsWith("nz") || v.endsWith("_nz") || v.includes("-nz")) return "NZ";
+  // 4. Fallback to common patterns (High Priority for US/AU/NZ/GB/CA)
+  if (v.includes("united states") || v.includes(" usa") || v.includes("[us]") || v.includes("_us") || v.startsWith("us-")) return "US";
+  if (v.includes("australia") || v.includes(" aus") || v.includes("[au]") || v.includes("_au") || v.startsWith("au-")) return "AU";
+  if (v.includes("new zealand") || v.includes(" nz") || v.includes("[nz]") || v.includes("_nz") || v.startsWith("nz-")) return "NZ";
+  if (v.includes("united kingdom") || v.includes(" uk") || v.includes("[gb]") || v.includes("_gb") || v.startsWith("gb-")) return "GB";
+  if (v.includes("canada") || v.includes(" ca") || v.includes("[ca]") || v.includes("_ca")) return "CA";
 
   // 5. Fallback to first 2 chars if they form a known code
   const fallback = v.slice(0, 2).toUpperCase();

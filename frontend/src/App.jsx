@@ -783,13 +783,12 @@ function DashboardPage() {
                     // world-atlas@2.0.2 uses geo.id (numeric) NOT geo.properties.name
                     const numericLookup = {};
                     (geoData.geo || []).forEach(entry => {
-                      const numericId = ISO_ALPHA2_TO_NUMERIC[entry.code];
+                      const numericId = Number(ISO_ALPHA2_TO_NUMERIC[entry.code]);
                       if (numericId) numericLookup[numericId] = entry;
                     });
 
                     return geographies.map((geo) => {
-                      // Match by numeric ID — works for ALL countries including US/AU/NZ
-                      const geoNumericId = String(geo.id || "");
+                      const geoNumericId = Number(geo.id);
                       const d = numericLookup[geoNumericId];
                       
                       const actualMetric = geoMetric === "leads" ? "conversions" : geoMetric;
