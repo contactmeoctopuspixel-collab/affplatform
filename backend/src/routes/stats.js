@@ -147,44 +147,52 @@ router.get("/dashboard", async (req, res) => {
     }
 
     // ── Top offers — real leads from selected date range ─────────────────────
-    const offers = await db.offers.find({ status: "active" });
+    const allKnownOffers = await db.offers.find({});
     const spMap  = Object.fromEntries(sponsors.map(s => [s.id, s]));
+    const offerLookup = {};
+    for (const o of allKnownOffers) {
+      const raw = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
+      offerLookup[o.id] = o;
+      if (raw) offerLookup[raw] = o;
+      if (o.external_id) offerLookup[o.external_id] = o;
+    }
 
-    // Count real leads per offer_id in the selected period
     const periodConversions = await db.conversions.find({
       created_at: { $gte: fromStart, $lte: toEnd },
     });
-    const leadsByOffer = {};
+    
+    const leadsByOfferMap = {};
     for (const cv of periodConversions) {
-      const oid = cv.offer_id || "";
-      if (!oid) continue;
-      if (!leadsByOffer[oid]) leadsByOffer[oid] = { leads: 0, revenue: 0 };
-      leadsByOffer[oid].leads += 1;
-      leadsByOffer[oid].revenue += cv.revenue || 0;
+      const oid = cv.offer_id || "unknown";
+      if (!leadsByOfferMap[oid]) {
+        leadsByOfferMap[oid] = { 
+          id: oid, 
+          external_id: oid,
+          name: `Offer ${oid}`, 
+          sponsor_name: cv.sponsor || "Unknown",
+          sponsor_color: "var(--text2)",
+          payout: 0,
+          leads: 0, 
+          est_revenue: 0 
+        };
+        // Enrich if we have offer data
+        const o = offerLookup[oid];
+        if (o) {
+          leadsByOfferMap[oid].name = o.name;
+          leadsByOfferMap[oid].payout = o.payout || 0;
+          const sp = spMap[o.sponsor_id];
+          if (sp) {
+            leadsByOfferMap[oid].sponsor_name = sp.name;
+            leadsByOfferMap[oid].sponsor_color = sp.color;
+          }
+        }
+      }
+      leadsByOfferMap[oid].leads += 1;
+      leadsByOfferMap[oid].est_revenue += (cv.revenue || 0);
     }
 
-    let topOffers = offers
-      .filter(o => sponsors.some(s => s.id === o.sponsor_id))
-      .map(o => {
-        const sp = spMap[o.sponsor_id];
-        // Strip prefix from offer's DB ID to match conversion's raw offer_id
-        const rawOid = (o.id || o._id || "").replace(/^[A-Z0-9]+-/, "");
-        const period = leadsByOffer[rawOid] || leadsByOffer[o.id] || leadsByOffer[o._id] || { leads: 0, revenue: 0 };
-        const leads = period.leads;
-        const estRev = period.revenue || (o.payout * leads);
-        return {
-          ...o,
-          leads,
-          est_revenue:   estRev,
-          sponsor_name:  sp?.name,
-          sponsor_color: sp?.color,
-        };
-      });
-
-    // Sort and slice (show only real data)
-    topOffers = topOffers
-      .filter(o => o.leads > 0 || o.est_revenue > 0)
-      .sort((a, b) => (b.est_revenue || 0) - (a.est_revenue || 0))
+    const topOffers = Object.values(leadsByOfferMap)
+      .sort((a, b) => b.est_revenue - a.est_revenue)
       .slice(0, 15);
 
     // ── Sponsor breakdown ─────────────────────────────────────────────────────
