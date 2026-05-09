@@ -458,6 +458,7 @@ function DashboardPage() {
   const [activePreset, setActivePreset] = useState("today");
   const [filterSponsor, setFilterSponsor] = useState("");
   const [sponsors,    setSponsors]    = useState([]);
+  const [geoMetric,   setGeoMetric]   = useState("revenue");
 
   const PRESETS = [
     { id:"today",     label:"Today",        days:0 },
@@ -677,9 +678,17 @@ function DashboardPage() {
         <div className="card mb-6">
           <div className="card-head">
             <span className="card-title">Geographic Distribution</span>
-            <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
-              {geoData.geo.reduce((s,g)=>s+g.conversions,0)} conversions
-            </span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <select className="form-input" style={{width:120,padding:"4px 8px",fontSize:10}}
+                value={geoMetric} onChange={e => setGeoMetric(e.target.value)}>
+                <option value="revenue">Revenue</option>
+                <option value="conversions">Conversions</option>
+                <option value="clicks">Clicks</option>
+              </select>
+              <span style={{fontFamily:"var(--font-mono)",fontSize:10,color:"var(--text2)"}}>
+                {geoData.geo.reduce((s,g)=>s+g.conversions,0)} total
+              </span>
+            </div>
           </div>
           <div style={{padding:"8px 12px"}}>
             <svg viewBox="0 0 800 380" style={{width:"100%",height:"auto",display:"block"}}>
@@ -738,12 +747,18 @@ function DashboardPage() {
                   SA: { d:"M515,218 L528,212 L542,214 L552,220 L556,232 L552,242 L542,248 L530,250 L520,246 L512,238 L508,228 Z", cx:532, cy:230 },
                 }[g.code];
                 if (!shape) return null;
+                const metricVal = g[geoMetric] || g.revenue || 0;
+                const maxMetric = Math.max(...geoData.geo.map(x => x[geoMetric] || x.revenue || 0), 1);
+                const intensity = 0.15 + (metricVal / maxMetric) * 0.85;
                 return (
                   <g key={g.code}>
-                    <path d={shape.d} fill="#00e5ff" fillOpacity="0.08" stroke="#00e5ff" strokeWidth="3" strokeOpacity="0.15"/>
-                    <path d={shape.d} fill="#00e5ff" fillOpacity="0.18" stroke="#00e5ff" strokeWidth="1.2" strokeOpacity="0.5"/>
-                    <path d={shape.d} fill="#00e5ff" fillOpacity="0.25" stroke="#00e5ff" strokeWidth="0.6"/>
-                    <text x={shape.cx} y={shape.cy + 4} textAnchor="middle" fill="#e2e8f0" fontSize="8" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
+                    <path d={shape.d} fill="#00e5ff" fillOpacity={0.04 * intensity} stroke="#00e5ff" strokeWidth="3" strokeOpacity={0.08 * intensity}/>
+                    <path d={shape.d} fill="#00e5ff" fillOpacity={0.1 * intensity} stroke="#00e5ff" strokeWidth="1.2" strokeOpacity={0.3 * intensity}/>
+                    <path d={shape.d} fill="#00e5ff" fillOpacity={0.15 * intensity} stroke="#00e5ff" strokeWidth="0.6"/>
+                    <text x={shape.cx} y={shape.cy + 3} textAnchor="middle" fill="#e2e8f0" fontSize="7" fontFamily="IBM Plex Mono,monospace" fontWeight="700">{g.name}</text>
+                    <text x={shape.cx} y={shape.cy + 12} textAnchor="middle" fill="#00e5ff" fontSize="6" fontFamily="IBM Plex Mono,monospace" opacity="0.7">
+                      {geoMetric === "revenue" ? `$${metricVal.toFixed(0)}` : metricVal} {geoMetric}
+                    </text>
                   </g>
                 );
               })}
