@@ -726,27 +726,34 @@ router.get("/geo", async (req, res) => {
     // Load all offers for lookups
     const allOffers = await db.offers.find({});
 
-    // Build lookup: raw ID → name AND full ID → name
+    // Build lookup: ID → { name, country }
     const offerLookup = {};
     for (const o of allOffers) {
       const fullId = o.id || o._id || "";
       const rawId = fullId.replace(/^[A-Z0-9]+-/, "");
-      if (rawId && o.name && !offerLookup[rawId]) offerLookup[rawId] = o.name;
-      if (fullId && o.name && !offerLookup[fullId]) offerLookup[fullId] = o.name;
+      const entry = { name: o.name || "", country: o.country || "" };
+      if (rawId && !offerLookup[rawId]) offerLookup[rawId] = entry;
+      if (fullId && !offerLookup[fullId]) offerLookup[fullId] = entry;
     }
 
     // 2. Aggregate conversions by country
     const byCountry = {};
     for (const cv of conversions) {
-      const offerName = offerLookup[cv.offer_id] || "";
+      const oMeta = offerLookup[cv.offer_id] || { name: "", country: "" };
+      const offerName = oMeta.name;
       const offerIdStr = String(cv.offer_id || "");
       const sub3 = String(cv.sub3 || "");
       
       // Tiered Detection Logic
       let code = "";
       
-      // Tier 1: Raw country field (if not 'Unknown')
-      if (cv.country && cv.country !== "Unknown") {
+      // Tier 0: Check Offer Metadata (BEST SOURCE)
+      if (oMeta.country && oMeta.country !== "Unknown") {
+        code = oMeta.country;
+      }
+      
+      // Tier 1: Raw conversion country field
+      if (!code && cv.country && cv.country !== "Unknown") {
         code = countryToCode(cv.country);
       }
       

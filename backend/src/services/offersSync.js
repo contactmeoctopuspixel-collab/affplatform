@@ -112,6 +112,30 @@ function extractEmailCreatives(creativesBody) {
   return result;
 }
 
+const COUNTRY_NAME_MAP = {
+  "united states": "US", "usa": "US", "us": "US", "united states of america": "US",
+  "australia": "AU", "au": "AU", "aus": "AU",
+  "new zealand": "NZ", "nz": "NZ", "nzl": "NZ",
+  "united kingdom": "GB", "uk": "GB", "gb": "GB",
+  "canada": "CA", "ca": "CA",
+  "france": "FR", "germany": "DE", "italy": "IT", "spain": "ES"
+};
+
+function extractCountryFromName(name) {
+  if (!name) return "";
+  const v = name.toLowerCase();
+  for (const [k, code] of Object.entries(COUNTRY_NAME_MAP)) {
+    const regex = new RegExp(`(^|[^a-z])${k.replace('.', '\\.')}([^a-z]|$)`, 'i');
+    if (regex.test(v)) return code;
+  }
+  const m = name.match(/^([A-Z]{2,3})\s*-\s/);
+  if (m) {
+    const c = m[1].toUpperCase();
+    if (Object.values(COUNTRY_NAME_MAP).includes(c)) return c;
+  }
+  return "";
+}
+
 function guessCategory(name) {
   const n = (name || "").toLowerCase();
   if (n.includes("cloud") || n.includes("storage") || n.includes("drive")) return "Cloud Storage";
@@ -206,6 +230,7 @@ async function fetchEverflowOffers(apiKey) {
           payout:      cv > 0 ? +(rev / cv).toFixed(2) : 0,
           status:      "active",
           category:    guessCategory(col.label),
+          country:     extractCountryFromName(col.label),
         });
       }
     }
@@ -265,6 +290,7 @@ async function syncAllOffers() {
           leads:       o.leads    || 0,
           revenue:     o.revenue  || 0,
           category:    o.category,
+          country:     o.country || "",
           status:      o.status   || "active",
           external_id: o.external_id,
           created_at:  new Date().toISOString(),
