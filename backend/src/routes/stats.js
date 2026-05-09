@@ -658,12 +658,20 @@ const COUNTRY_NAME_MAP = {
 function extractCountryFromName(name) {
   if (!name) return "";
   const v = name.toLowerCase();
+  
+  // Tier 1: High-priority Regional Regex (US, AU, NZ)
+  if (/^us\s*[-_]/i.test(v) || v.includes("[us]") || v.includes("(us)") || v.includes("_us")) return "US";
+  if (/^au\s*[-_]/i.test(v) || v.includes("[au]") || v.includes("(au)") || v.includes("_au") || v.includes("australia")) return "AU";
+  if (/^nz\s*[-_]/i.test(v) || v.includes("[nz]") || v.includes("(nz)") || v.includes("_nz") || v.includes("new zealand")) return "NZ";
+  
+  // Tier 2: Pattern matching from map
   for (const [k, code] of Object.entries(COUNTRY_NAME_MAP)) {
     const regex = new RegExp(`(^|[^a-z])${k.replace('.', '\\.')}([^a-z]|$)`, 'i');
     if (regex.test(v)) return code;
   }
-  // Match prefixes like "US - ", "AU - ", "US-"
-  const m = name.match(/^([A-Z]{2,3})\s*-\s/i);
+
+  // Tier 3: General prefix matching
+  const m = name.match(/^([A-Z]{2,3})\s*[-_]/i);
   if (m) {
     const c = m[1].toUpperCase();
     if (c === "USA") return "US";

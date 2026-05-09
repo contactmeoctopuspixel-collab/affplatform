@@ -783,8 +783,11 @@ function DashboardPage() {
                     // world-atlas@2.0.2 uses geo.id (numeric) NOT geo.properties.name
                     const numericLookup = {};
                     (geoData.geo || []).forEach(entry => {
-                      const numericId = Number(ISO_ALPHA2_TO_NUMERIC[entry.code]);
-                      if (numericId) numericLookup[numericId] = entry;
+                      const iso = (entry.code || "").toUpperCase();
+                      const rawNum = ISO_ALPHA2_TO_NUMERIC[iso];
+                      if (rawNum) {
+                        numericLookup[Number(rawNum)] = entry;
+                      }
                     });
 
                     return geographies.map((geo) => {
