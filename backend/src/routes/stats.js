@@ -333,7 +333,7 @@ router.get("/dashboard", async (req, res) => {
     });
 
     res.json({
-      kpis: { totalRevenue, totalClicks, totalLeads, activeOffers, connectedApis, totalSponsors: sponsors.length },
+      kpis: { totalRevenue, totalClicks, totalLeads, activeOffers, connectedApis, totalSponsors: sponsors.length, totalExpenses, netRevenue: totalRevenue - totalExpenses },
       weeklyChart,
       topOffers,
       sponsorBreakdown,

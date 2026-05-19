@@ -95,7 +95,8 @@ app.get("/api/postback", async (req, res) => {
 app.use("/api/auth",     require("./routes/auth"));
 app.use("/api/sponsors", require("./routes/sponsors"));
 app.use("/api/offers",   require("./routes/offers"));
-app.use("/api/stats",    require("./routes/stats"));
+app.use("/api/stats",     require("./routes/stats"));
+app.use("/api/expenses", require("./routes/expenses"));
 app.use("/api/ai",       require("./routes/ai"));
 app.use("/api/chat",     require("./routes/chat"));
 
