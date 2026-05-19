@@ -332,6 +332,21 @@ router.get("/dashboard", async (req, res) => {
       };
     });
 
+    // ─── EXPENSES CALCULATION ────────────────────────────────────────────────
+    let totalExpenses = 0;
+    try {
+      const expenseFilter = {};
+      if (fromDate || toDate) {
+        expenseFilter.created_at = {};
+        if (fromDate) expenseFilter.created_at.$gte = fromStart;
+        if (toDate)   expenseFilter.created_at.$lte = toEnd;
+      }
+      const expenses = await db.expenses.find(expenseFilter);
+      totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+    } catch (e) {
+      console.warn("Failed to calculate expenses:", e.message);
+    }
+
     res.json({
       kpis: { totalRevenue, totalClicks, totalLeads, activeOffers, connectedApis, totalSponsors: sponsors.length, totalExpenses, netRevenue: totalRevenue - totalExpenses },
       weeklyChart,
